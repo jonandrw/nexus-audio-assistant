@@ -3,11 +3,21 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Settings2 } from "lucide-react";
 import { useAudioStore } from "@/lib/audio-store";
+import { sendOscCommand } from "@/lib/osc-client";
+import { DraggableValue } from "./DraggableValue";
 
 export function DynamicsPanel() {
   const circleRef = useRef<SVGCircleElement>(null);
   const textRef = useRef<HTMLSpanElement>(null);
   const [isClipping, setIsClipping] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  
+  const resetGate = async () => {
+      setGateThr(-60); // min threshold effectively bypasses gate
+      await sendOscCommand('/ch/01/dyn/thr', [0]); // -60dB -> 0.0
+      setShowMenu(false);
+  };
+  const [gateThr, setGateThr] = useState(-42.0);
 
   // Circunferencia del anillo SVG: r=40 -> 2*PI*40 ≈ 251.2
   const dashArray = 251.2;
@@ -51,49 +61,71 @@ export function DynamicsPanel() {
   }, [dashArray, isClipping]);
 
   return (
-    <div className="panel flex-1 p-4 flex flex-col relative">
-        <h2 className="panel-header mb-4 pb-2 border-b border-slate-800">DYNAMICS (VU METER)</h2>
-        <button className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors">
-            <Settings2 className="w-4 h-4" />
-        </button>
-
-        <div className="flex-1 flex items-center justify-center relative">
-            {/* SVG Knob Base */}
-            <svg viewBox="0 0 100 100" className="w-32 h-32 transform -rotate-90 drop-shadow-xl">
-                <circle cx="50" cy="50" r="40" fill="none" stroke="#1e293b" strokeWidth="8" />
-                <circle 
-                  ref={circleRef}
-                  cx="50" 
-                  cy="50" 
-                  r="40" 
-                  fill="none" 
-                  stroke="#22c55e" 
-                  strokeWidth="8" 
-                  strokeDasharray={dashArray} 
-                  strokeDashoffset={dashArray} 
-                  className="transition-all duration-75 ease-out" 
-                  strokeLinecap="round" 
-                />
-            </svg>
-
-            {/* Inner Values (Actualizados vía ref) */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-[10px] text-slate-500 mb-1">RMS IN</span>
-                <span ref={textRef} className="text-xl font-bold font-mono tracking-tighter text-slate-200">
-                    -∞
-                </span>
-                <span className="text-xxs text-slate-500 mt-1 font-mono">dBFS</span>
-            </div>
+    <div className="flex flex-col flex-1 min-h-0 bg-black">
+        <div className="flex justify-between items-center bg-zinc-950 border-b border-zinc-900 px-4 py-2 shrink-0 relative">
+            <span className="text-[10px] font-bold text-zinc-500 tracking-[0.2em] uppercase">NOISE GATE</span>
+            <button onClick={() => setShowMenu(!showMenu)} className="text-zinc-500 hover:text-zinc-300 transition-colors">
+                <Settings2 className="w-3 h-3" />
+            </button>
+            {showMenu && (
+                <div className="absolute top-full right-2 mt-1 w-28 bg-black border border-zinc-800 shadow-2xl z-50">
+                    <button onClick={resetGate} className="w-full text-left px-3 py-1.5 text-[9px] font-bold font-mono text-red-500 hover:bg-zinc-900 transition-colors">
+                        RESET GATE
+                    </button>
+                </div>
+            )}
         </div>
 
-        <div className="grid grid-cols-2 gap-2 mt-4">
-            <div className="bg-slate-900 rounded p-2 text-center border border-slate-800">
-                <div className="text-[9px] text-slate-500 mb-1">GATE THRESHOLD</div>
-                <div className="text-xs font-mono text-slate-300">-42.0 dB</div>
+        <div className="flex-1 flex flex-col p-1.5 gap-1.5">
+            <div className="flex-1 flex items-center justify-center relative bg-black border border-zinc-900 overflow-hidden">
+                {/* SVG Knob Base */}
+                <svg viewBox="0 0 100 100" className="w-28 h-28 transform -rotate-90">
+                    <circle cx="50" cy="50" r="40" fill="none" stroke="#09090b" strokeWidth="8" />
+                    <circle 
+                      ref={circleRef}
+                      cx="50" 
+                      cy="50" 
+                      r="40" 
+                      fill="none" 
+                      stroke="#10b981" 
+                      strokeWidth="8" 
+                      strokeDasharray={dashArray} 
+                      strokeDashoffset={dashArray} 
+                      className="transition-all duration-75 ease-out" 
+                      strokeLinecap="butt" 
+                    />
+                </svg>
+
+                {/* Inner Values (Actualizados vía ref) */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-[8px] font-mono text-zinc-500 mb-0.5">RMS IN</span>
+                    <span ref={textRef} className="text-xl font-bold font-mono tracking-tighter text-zinc-300">
+                        -∞
+                    </span>
+                    <span className="text-[8px] text-zinc-600 mt-0.5 font-mono">dBFS</span>
+                </div>
             </div>
-            <div className="bg-slate-900 rounded p-2 text-center border border-slate-800">
-                <div className="text-[9px] text-slate-500 mb-1">KEY SOURCE</div>
-                <div className="text-xs font-mono text-brand">CH 01</div>
+
+            <div className="grid grid-cols-2 gap-[1px] bg-zinc-900 border border-zinc-900 text-center shrink-0">
+                <div className="bg-black py-1">
+                    <div className="text-[8px] text-zinc-500 font-mono">GATE THR</div>
+                    <DraggableValue 
+                        value={gateThr}
+                        min={-80}
+                        max={0}
+                        step={1}
+                        onChange={setGateThr}
+                        onComplete={async (val) => {
+                            const normalizedGate = (val + 80) / 80;
+                            await sendOscCommand('/ch/01/gate/thr', [normalizedGate]);
+                        }}
+                        className="text-[10px] font-mono text-zinc-400 font-bold"
+                    />
+                </div>
+                <div className="bg-black py-1">
+                    <div className="text-[8px] text-zinc-500 font-mono">KEY SRC</div>
+                    <div className="text-[10px] font-mono text-emerald-500 font-bold cursor-pointer hover:text-white transition-colors">CH 01</div>
+                </div>
             </div>
         </div>
     </div>

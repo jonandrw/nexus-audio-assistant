@@ -54,9 +54,9 @@ export default function DashboardPage() {
         {/* HEADER */}
         <TopBar />
 
-        <main className="flex-1 overflow-hidden p-4 flex gap-4">
+        <main className="flex-1 overflow-hidden flex bg-black">
           {/* SIDEBAR IZQUIERDO: Canales */}
-          <aside className="w-72 flex flex-col gap-4 shrink-0 overflow-hidden">
+          <aside className="w-80 flex flex-col shrink-0 border-r border-zinc-900 bg-zinc-950 overflow-hidden">
             <ChannelList 
               channels={channels} 
               activeChannelId={activeChannelId} 
@@ -67,25 +67,29 @@ export default function DashboardPage() {
           </aside>
 
           {/* CENTER SECTION */}
-          <section className="flex-1 flex flex-col gap-4 min-w-0 overflow-hidden">
-            <RTACanvas activeChannel={activeChannel} />
+          <section className="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <div className="flex-1 overflow-hidden relative bg-black flex flex-col">
+               <RTACanvas activeChannel={activeChannel} />
+            </div>
             
-            <div className="h-64 flex gap-4 shrink-0 overflow-hidden">
-              <DynamicsPanel />
-              <EqPanel />
-              <CompPanel />
+            <div className="h-56 flex shrink-0 overflow-hidden border-t border-zinc-900 bg-zinc-950">
+              <div className="flex-1 border-r border-zinc-900 flex"><DynamicsPanel /></div>
+              <div className="flex-1 border-r border-zinc-900 flex"><EqPanel /></div>
+              <div className="flex-1 flex"><CompPanel /></div>
             </div>
           </section>
 
           {/* SIDEBAR DERECHO */}
-          <aside className="w-72 flex flex-col gap-4 shrink-0 overflow-hidden">
+          <aside className="w-80 flex flex-col shrink-0 border-l border-zinc-900 bg-zinc-950 overflow-hidden">
             <AIPilotPanel activeChannel={activeChannel} />
+            <div className="h-px bg-zinc-900 w-full shrink-0" />
             <EventLog />
+            <div className="h-px bg-zinc-900 w-full shrink-0" />
             <NetworkPanel />
           </aside>
         </main>
 
-        {/* FOOTER */}
+        {/* FOOTER: Status Bar */}
         <BottomBar />
       </div>
     </AudioEngineProvider>

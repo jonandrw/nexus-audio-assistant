@@ -29,87 +29,85 @@ const IconMap: Record<string, any> = {
 };
 
 export function ChannelList({ channels, activeChannelId, onSelectChannel, onToggleMute, onToggleSolo }: ChannelListProps) {
-  // Función para renderizar el medidor LED
+  
+  // Medidor LED horizontal hiper-denso tipo FOH
   const getLedMeter = (level: number) => {
-    const totalBars = 15;
-    const activeBars = Math.max(0, Math.min(totalBars, Math.floor((level + 60) / 4)));
+    const totalBars = 20;
+    const activeBars = Math.max(0, Math.min(totalBars, Math.floor((level + 60) / 3.5)));
     
     return (
-      <div className="flex items-end h-2 mt-1">
+      <div className="flex h-1 mt-1.5 gap-px w-full bg-black border border-zinc-900 p-px">
         {Array.from({ length: totalBars }).map((_, i) => {
-          let colorClass = "meter-off";
+          let colorClass = "bg-zinc-900"; // OFF
           if (i < activeBars) {
-            if (i < 10) colorClass = "meter-green";
-            else if (i < 13) colorClass = "meter-yellow";
-            else colorClass = "meter-red";
+            if (i < 12) colorClass = "bg-emerald-500";
+            else if (i < 17) colorClass = "bg-yellow-500";
+            else colorClass = "bg-red-500";
           }
-          return <div key={i} className={`meter-bar ${colorClass}`} />;
+          return <div key={i} className={`flex-1 h-full ${colorClass}`} />;
         })}
       </div>
     );
   };
 
   return (
-    <div className="flex flex-col h-full gap-4">
-      {/* Lista de Canales */}
-      <div className="panel flex-1 flex flex-col overflow-hidden">
-        <div className="p-4 pb-2 flex justify-between items-center border-b border-slate-700">
-          <h2 className="text-xs font-semibold tracking-wide text-slate-400">CANALES</h2>
-          <span className="text-xs text-brand font-medium">12 <span className="text-slate-500">/ 32</span></span>
+    <div className="flex flex-col h-full bg-zinc-950">
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="panel-header flex justify-between items-center">
+          <span>TRACKLIST</span>
+          <span className="text-emerald-500 tracking-normal font-mono">
+             {activeChannelId ? String(channels.find(c => c.id === activeChannelId)?.number || 0).padStart(2, '0') : '--'}
+             <span className="text-zinc-600">/{channels.length}</span>
+          </span>
         </div>
         
-        <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
           {channels.map((ch) => {
             const isActive = activeChannelId === ch.id;
             const Icon = IconMap[ch.icon || "Mic"] || Mic;
-            const bgClass = isActive ? "bg-slate-700/50 border-slate-600" : "bg-transparent border-transparent hover:bg-slate-800/50";
+            const bgClass = isActive ? "bg-zinc-900 border-l-2 border-emerald-500" : "bg-zinc-950 border-l-2 border-transparent hover:bg-zinc-900/40";
             
             return (
               <div 
                 key={ch.id} 
                 onClick={() => onSelectChannel(ch.id)}
-                className={cn("flex items-center gap-3 p-2 rounded border cursor-pointer group", bgClass)}
+                className={cn("flex flex-col p-2.5 border-b border-zinc-900 cursor-pointer select-none transition-colors", bgClass)}
               >
-                <div className={cn("w-8 h-8 rounded bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0", ch.color)}>
-                  <Icon className="w-4 h-4" />
+                <div className="flex justify-between items-center">
+                   <div className="flex items-center gap-2 overflow-hidden">
+                      <span className="text-[9px] text-zinc-500 font-mono w-3 shrink-0">{ch.number}</span>
+                      <Icon className="w-3 h-3 text-zinc-400 shrink-0" />
+                      <span className={`text-xs font-bold truncate ${isActive ? 'text-white' : 'text-slate-300'}`}>{ch.name}</span>
+                   </div>
+                   <div className="flex gap-1 shrink-0">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); onToggleMute(ch.id); }}
+                        className={cn("w-5 h-5 flex items-center justify-center text-[9px] font-bold border transition-colors", ch.muted ? "bg-red-500 text-black border-red-500" : "bg-zinc-950 text-zinc-500 border-zinc-800 hover:bg-zinc-800 hover:text-zinc-300")}
+                      >
+                        M
+                      </button>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); onToggleSolo(ch.id); }}
+                        className={cn("w-5 h-5 flex items-center justify-center text-[9px] font-bold border transition-colors", ch.solo ? "bg-yellow-500 text-black border-yellow-500" : "bg-zinc-950 text-zinc-500 border-zinc-800 hover:bg-zinc-800 hover:text-zinc-300")}
+                      >
+                        S
+                      </button>
+                   </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-baseline mb-0.5">
-                    <span className="text-sm font-medium text-slate-200 truncate pr-2">
-                      <span className="text-slate-500 font-mono text-xs mr-1">{ch.id}</span>
-                      {ch.name}
-                    </span>
-                    <span className="text-xs font-mono text-slate-400">{ch.level.toFixed(1)} dB</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xxs text-slate-500 truncate">{ch.type}</span>
-                  </div>
-                  {getLedMeter(ch.level)}
+                <div className="flex justify-between items-center mt-1">
+                   <span className="text-[9px] font-mono text-zinc-500 tracking-wider">CH {ch.id}</span>
+                   <span className="text-[10px] font-mono text-slate-400">{ch.level > -60 ? ch.level.toFixed(1) : '-INF'} dB</span>
                 </div>
-                <div className="flex flex-col gap-1 shrink-0">
-                  <div 
-                    onClick={(e) => { e.stopPropagation(); onToggleMute(ch.id); }}
-                    className={cn("btn-icon", ch.muted && "bg-red-500/20 text-red-500 border-red-500/50 border")}>M</div>
-                  <div 
-                    onClick={(e) => { e.stopPropagation(); onToggleSolo(ch.id); }}
-                    className={cn("btn-icon", ch.solo && "bg-yellow-500/20 text-yellow-500 border-yellow-500/50 border")}>S</div>
-                </div>
+                {getLedMeter(ch.level)}
               </div>
             );
           })}
         </div>
-
-        <div className="p-3 border-t border-slate-700 flex justify-between items-center">
-          <button className="text-xs text-slate-300 hover:text-white flex items-center gap-2">
-            <Plus className="w-3 h-3" /> AGREGAR CANAL
-          </button>
-          <button className="text-slate-400 hover:text-white">
-            <MoreVertical className="w-4 h-4" />
-          </button>
-        </div>
       </div>
 
-      <SceneManager />
+      <div className="border-t border-zinc-900 bg-zinc-950 shrink-0">
+        <SceneManager />
+      </div>
     </div>
   );
 }

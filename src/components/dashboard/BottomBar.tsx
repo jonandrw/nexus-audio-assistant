@@ -6,33 +6,34 @@ export function BottomBar() {
     const memoryMb = (memoryBytes / 1024 / 1024).toFixed(1);
 
     return (
-        <footer className="h-20 border-t border-zinc-800 bg-black p-4 flex flex-col justify-center shrink-0">
-            <h2 className="panel-header mb-2 !border-none !pb-0 text-xxs">SYSTEM OVERVIEW</h2>
-            <div className="flex justify-between items-end h-full gap-8">
-                <div className="flex-1 flex flex-col justify-end">
-                    <div className="text-xs text-slate-400 mb-1">Audio Inputs</div>
-                    <div className="text-lg font-mono leading-none">32</div>
-                    <div className="h-4 mt-1 opacity-50"><div className="sparkline w-full !h-[10px]"></div></div>
+        <footer className="h-8 border-t border-zinc-900 bg-zinc-950 px-4 flex items-center justify-between shrink-0 text-[10px] text-slate-400 font-mono tracking-wider">
+            <div className="flex items-center gap-6">
+                <div className="flex items-center gap-2">
+                    <span className="text-zinc-600">INPUTS</span>
+                    <span className="text-slate-300">32</span>
                 </div>
-                <div className="flex-1 flex flex-col justify-end">
-                    <div className="text-xs text-slate-400 mb-1">Link Status</div>
-                    <div className={`text-lg font-mono leading-none ${isConnected ? 'text-brand' : 'text-red-500'}`}>{isConnected ? 'SYNC' : 'DROP'}</div>
-                    <div className="h-4 mt-1 opacity-50"><div className="sparkline w-full !h-[10px]"></div></div>
+                <div className="flex items-center gap-2">
+                    <span className="text-zinc-600">ACTIVE</span>
+                    <span className="text-slate-300">18</span>
                 </div>
-                 <div className="flex-1 flex flex-col justify-end">
-                    <div className="text-xs text-slate-400 mb-1">OSC Transmit</div>
-                    <div className={`text-lg font-mono leading-none ${isConnected ? 'text-slate-200' : 'text-slate-600'}`}>{isConnected ? '~120' : '0'}</div>
-                    <div className="h-4 mt-1 opacity-50"><div className="sparkline w-full !h-[10px]"></div></div>
+            </div>
+            
+            <div className="flex items-center gap-6">
+                <div className="flex items-center gap-2">
+                    <span className="text-zinc-600">OSC TX/S</span>
+                    <span className={`${isConnected ? 'text-slate-300' : 'text-zinc-600'}`}>{isConnected ? '~120' : '0'}</span>
                 </div>
-                <div className="flex-1 flex flex-col justify-end">
-                    <div className="text-xs text-slate-400 mb-1">Hardware RTT</div>
-                    <div className="text-lg font-mono leading-none">{latencyMs > 0 ? latencyMs : '--'} <span className="text-sm">ms</span></div>
-                    <div className="h-4 mt-1 opacity-50"><div className="sparkline w-full !h-[10px]"></div></div>
+                <div className="flex items-center gap-2">
+                    <span className="text-zinc-600">RTT</span>
+                    <span className={latencyMs > 150 ? 'text-red-400' : 'text-slate-300'}>{latencyMs > 0 ? `${latencyMs}ms` : '--'}</span>
                 </div>
-                <div className="flex-1 flex flex-col justify-end">
-                    <div className="text-xs text-slate-400 mb-1">V8 Engine Memory</div>
-                    <div className="text-lg font-mono leading-none">{memoryMb} <span className="text-sm">MB</span></div>
-                    <div className="h-4 mt-1 opacity-50"><div className="sparkline w-full !h-[10px]"></div></div>
+                <div className="flex items-center gap-2 border-l border-zinc-800 pl-6">
+                    <span className="text-zinc-600">V8 HEAP</span>
+                    <span className={(memoryBytes / 1024 / 1024) > 400 ? 'text-red-400' : 'text-slate-300'}>{memoryMb}MB</span>
+                </div>
+                <div className="flex items-center gap-2 ml-4">
+                    <div className={`w-1.5 h-1.5 rounded-none ${isConnected ? 'bg-brand' : 'bg-red-500'}`}></div>
+                    <span className={`${isConnected ? 'text-brand' : 'text-red-500'} font-bold`}>{isConnected ? 'SYNCED' : 'OFFLINE'}</span>
                 </div>
             </div>
         </footer>

@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Waves, Network, Server, Microchip, Timer, Activity, Moon, Settings, ChevronDown } from 'lucide-react';
+import { Waves, Settings } from 'lucide-react';
 import { useNetworkStore } from '@/lib/network-store';
 
 export function TopBar() {
@@ -22,82 +22,60 @@ export function TopBar() {
   };
 
   return (
-    <header className="h-16 border-b border-slate-700 bg-slate-800 flex items-center justify-between px-4 shrink-0">
+    <header className="h-14 border-b border-zinc-900 bg-zinc-950 flex items-center justify-between px-4 shrink-0">
         {/* Logo */}
-        <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center border border-slate-600">
-                <Waves className="text-brand w-5 h-5" />
+        <div className="flex items-center gap-4">
+            <div className="w-8 h-8 bg-black flex items-center justify-center border border-zinc-800">
+                <Waves className="text-emerald-500 w-5 h-5" />
             </div>
-            <div>
-                <h1 className="font-bold text-base leading-tight tracking-wide flex items-center gap-2">
-                    MIXVISION <span className="text-brand font-light">PRO</span>
+            <div className="flex flex-col">
+                <h1 className="font-black text-sm tracking-[0.15em] flex items-center gap-2 text-white">
+                    NEXUS <span className="text-emerald-500 font-light">PRO</span>
                 </h1>
-                <p className="text-xxs text-slate-400">Audio Analysis & Control System</p>
+                <p className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">FOH DSP Engine</p>
             </div>
         </div>
 
-        {/* Top Metrics */}
-        <div className="hidden md:flex items-center gap-4 text-xs">
-            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-700 transition-colors ${isConnected ? 'bg-zinc-900/50' : 'bg-red-950/20'}`}>
-                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-brand animate-pulse' : 'bg-red-500'}`}></div>
-                <span className={`${isConnected ? 'text-brand' : 'text-red-500'} font-medium`}>{isConnected ? 'LIVE' : 'OFFLINE'}</span>
-                <span className="text-slate-400 ml-1 font-mono">{formatTime(liveSeconds)}</span>
-            </div>
-            
-            <div className="flex items-center gap-3 bg-slate-900/50 px-3 py-1.5 rounded border border-slate-700">
-                <Network className={`${isConnected ? 'text-brand' : 'text-red-500'} w-4 h-4`} />
-                <div className="flex flex-col">
-                    <span className="font-medium text-slate-200">M32 <span className={`${isConnected ? 'text-slate-400' : 'text-red-500'} text-xxs font-normal`}>{isConnected ? 'CONNECTED' : 'OFFLINE'}</span></span>
-                    <span className="text-xxs text-slate-500 font-mono">192.168.1.50</span>
+        {/* Top Metrics / Status Indicators */}
+        <div className="hidden md:flex items-center h-full">
+            <div className="flex items-center h-full border-l border-zinc-900 px-6">
+                <div className="flex flex-col items-center justify-center">
+                    <span className="text-[9px] text-zinc-500 font-mono mb-1">M32 CORE</span>
+                    <div className="flex items-center gap-2">
+                        <div className={`w-1.5 h-1.5 ${isConnected ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-zinc-800'}`}></div>
+                        <span className={`text-xs font-bold font-mono tracking-wider ${isConnected ? 'text-emerald-400' : 'text-zinc-600'}`}>{isConnected ? 'ONLINE' : 'OFFLINE'}</span>
+                    </div>
                 </div>
             </div>
 
-            <div className="flex items-center gap-3 bg-slate-900/50 px-3 py-1.5 rounded border border-slate-700">
-                <Server className="text-brand w-4 h-4" />
-                <div className="flex flex-col">
-                    <span className="font-medium text-slate-200">OSC</span>
-                    <span className="text-xxs text-slate-500">ACTIVE</span>
+            <div className="flex items-center h-full border-l border-zinc-900 px-6">
+                <div className="flex flex-col items-center justify-center">
+                    <span className="text-[9px] text-zinc-500 font-mono mb-1">DSP ENGINE</span>
+                    <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse"></div>
+                        <span className="text-xs font-bold font-mono tracking-wider text-emerald-400">ACTIVE</span>
+                    </div>
                 </div>
             </div>
 
-            <div className="flex items-center gap-3 bg-slate-900/50 px-3 py-1.5 rounded border border-slate-700">
-                <Microchip className="text-brand w-4 h-4" />
-                <div className="flex flex-col">
-                    <span className="font-medium text-slate-200">AUDIO ENGINE</span>
-                    <span className="text-xxs text-slate-500">RUNNING</span>
-                </div>
-            </div>
-
-            <div className="flex items-center gap-3 bg-slate-900/50 px-3 py-1.5 rounded border border-slate-700">
-                <Timer className="text-brand w-4 h-4" />
-                <div className="flex flex-col">
-                    <span className="font-medium text-slate-200">LATENCY</span>
-                    <span className="text-xxs text-slate-500">{latencyMs > 0 ? `${latencyMs} ms` : '--'}</span>
-                </div>
-            </div>
-
-             <div className="flex items-center gap-3 bg-slate-900/50 px-3 py-1.5 rounded border border-slate-700">
-                <Activity className="text-brand w-4 h-4" />
-                <div className="flex flex-col">
-                    <span className="font-medium text-slate-200">SAMPLE RATE</span>
-                    <span className="text-xxs text-slate-500">48 kHz</span>
+            <div className="flex items-center h-full border-l border-zinc-900 px-6">
+                <div className="flex flex-col items-center justify-center">
+                    <span className="text-[9px] text-zinc-500 font-mono mb-1">SHOW TIME</span>
+                    <span className={`text-xs font-bold font-mono tracking-wider ${isConnected ? 'text-white' : 'text-zinc-600'}`}>
+                        {formatTime(liveSeconds)}
+                    </span>
                 </div>
             </div>
         </div>
 
         {/* User Actions */}
-        <div className="flex items-center gap-3">
-            <button className="w-8 h-8 rounded bg-slate-700 hover:bg-slate-600 flex items-center justify-center text-slate-300">
-                <Moon className="w-4 h-4" />
-            </button>
-            <button className="w-8 h-8 rounded bg-slate-700 hover:bg-slate-600 flex items-center justify-center text-slate-300">
+        <div className="flex items-center gap-2 h-full border-l border-zinc-900 pl-4">
+            <button className="w-8 h-8 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 flex items-center justify-center text-zinc-400 transition-colors">
                 <Settings className="w-4 h-4" />
             </button>
-            <div className="flex items-center gap-2 pl-2 border-l border-slate-700">
-                <img src="https://ui-avatars.com/api/?name=Admin&background=334155&color=fff" alt="User" className="w-8 h-8 rounded-full border border-slate-600" />
-                <div className="hidden sm:block">
-                    <div className="text-sm font-medium flex items-center">Admin <ChevronDown className="w-3 h-3 text-slate-400 ml-1" /></div>
-                    <div className="text-xxs text-slate-400">Administrator</div>
+            <div className="flex items-center gap-2 pl-2">
+                <div className="w-8 h-8 bg-black border border-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-300 tracking-wider">
+                   FOH
                 </div>
             </div>
         </div>

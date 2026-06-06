@@ -27,11 +27,32 @@ export function RTACanvas({ activeChannel }: RTACanvasProps) {
   const maskingDetectorRef = useRef<MaskingDetector>(new MaskingDetector());
   const addAlert = useAIStore(state => state.addAlert);
   const setRmsLevel = useAudioStore(state => state.setRmsLevel);
+  const rtaContainerRef = useRef<HTMLDivElement>(null);
+  const meterContainerRef = useRef<HTMLDivElement>(null);
+  
+  const [drawMode, setDrawMode] = React.useState<'BARS' | 'CURVE'>('BARS');
+  const [isFullscreen, setIsFullscreen] = React.useState(false);
   
   const { 
     isListening, devices, selectedDeviceId, setSelectedDeviceId, 
     toggleListening, getFrequencyData, getSampleRate, getFloatTimeDomainData
   } = useAudioEngine();
+
+  useEffect(() => {
+    const onFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+        rtaContainerRef.current?.requestFullscreen().catch(err => {
+            console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+        });
+    } else {
+        document.exitFullscreen();
+    }
+  };
 
   // Drawing the canvas
   useEffect(() => {
@@ -83,9 +104,45 @@ export function RTACanvas({ activeChannel }: RTACanvasProps) {
         getFrequencyData(dataArray);
         getFloatTimeDomainData(floatTimeData);
 
-        // --- Cálculo de Dinámicas (RMS Centralizado) ---
+        // --- Cálculo de Dinámicas (RMS y Pico Centralizado) ---
         const rmsDb = calculateRMS(floatTimeData);
         setRmsLevel(rmsDb);
+
+        let peakLinear = 0;
+        for (let i = 0; i < floatTimeData.length; i++) {
+            const abs = Math.abs(floatTimeData[i]);
+            if (abs > peakLinear) peakLinear = abs;
+        }
+        const peakDb = 20 * Math.log10(peakLinear || 0.0001);
+
+        // --- Actualización de Medidores LED por DOM Directo ---
+        if (meterContainerRef.current) {
+            const leftBars = meterContainerRef.current.querySelectorAll('.meter-left > div');
+            const rightBars = meterContainerRef.current.querySelectorAll('.meter-right > div');
+            
+            const rmsActive = Math.max(0, Math.min(40, Math.floor(((rmsDb + 60) / 60) * 40)));
+            const peakActive = Math.max(0, Math.min(40, Math.floor(((peakDb + 60) / 60) * 40)));
+
+            for (let i = 0; i < 40; i++) {
+                let lColor = "rgb(39 39 42)"; // zinc-800
+                if (i < rmsActive) {
+                    if (i >= 35) lColor = "#ef4444"; // red-500 (-7.5 to 0 dB)
+                    else if (i >= 26) lColor = "#eab308"; // yellow-500 (-21 to -7.5 dB)
+                    else lColor = "#10b981"; // emerald-500 (-60 to -21 dB)
+                }
+                const lBar = leftBars[i] as HTMLElement;
+                if (lBar && lBar.style.backgroundColor !== lColor) lBar.style.backgroundColor = lColor;
+
+                let rColor = "rgb(39 39 42)"; 
+                if (i < peakActive) {
+                    if (i >= 35) rColor = "#ef4444"; 
+                    else if (i >= 26) rColor = "#eab308"; 
+                    else rColor = "#10b981"; 
+                }
+                const rBar = rightBars[i] as HTMLElement;
+                if (rBar && rBar.style.backgroundColor !== rColor) rBar.style.backgroundColor = rColor;
+            }
+        }
 
         // --- Análisis DSP en tiempo real (Zustand) ---
         const alert = detectorRef.current.analyze(dataArray, getSampleRate());
@@ -129,13 +186,43 @@ export function RTACanvas({ activeChannel }: RTACanvasProps) {
         ctx.fillStyle = gradient;
 
         const bufferLength = dataArray.length;
-        const barWidth = (w / bufferLength) * 2.5; 
-        let x = 0;
-
-        for (let i = 0; i < bufferLength; i++) {
-          const barHeight = (dataArray[i] / 255) * h;
-          ctx.fillRect(x, h - barHeight, barWidth, barHeight);
-          x += barWidth + 1;
+        
+        if (drawMode === 'BARS') {
+            const barWidth = (w / bufferLength) * 2.5; 
+            let xPos = 0;
+            for (let i = 0; i < bufferLength; i++) {
+              const barHeight = (dataArray[i] / 255) * h;
+              ctx.fillRect(xPos, h - barHeight, barWidth, barHeight);
+              xPos += barWidth + 1;
+            }
+        } else {
+            ctx.beginPath();
+            const sliceWidth = w * 1.0 / bufferLength;
+            let xPos = 0;
+            for (let i = 0; i < bufferLength; i++) {
+                const v = dataArray[i] / 255;
+                const y = h - (v * h);
+                if (i === 0) ctx.moveTo(xPos, y);
+                else ctx.lineTo(xPos, y);
+                xPos += sliceWidth;
+            }
+            ctx.lineTo(w, h);
+            ctx.lineTo(0, h);
+            ctx.closePath();
+            ctx.fill();
+            
+            ctx.beginPath();
+            xPos = 0;
+            for (let i = 0; i < bufferLength; i++) {
+                const v = dataArray[i] / 255;
+                const y = h - (v * h);
+                if (i === 0) ctx.moveTo(xPos, y);
+                else ctx.lineTo(xPos, y);
+                xPos += sliceWidth;
+            }
+            ctx.strokeStyle = "#10b981"; // emerald-500
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
         }
 
         // --- Espectrograma Waterfall (Hardware Accelerated) ---
@@ -213,79 +300,123 @@ export function RTACanvas({ activeChannel }: RTACanvasProps) {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [isListening, getFrequencyData, getSampleRate, activeChannel, addAlert]); 
+  }, [isListening, getFrequencyData, getSampleRate, activeChannel, addAlert, drawMode]); 
 
   return (
-    <div className="panel flex-1 flex flex-col p-4 min-h-0">
-      <div className="flex justify-between items-center mb-4">
+    <div ref={rtaContainerRef} className="flex-1 flex flex-col min-h-0 bg-black">
+      <div className="flex justify-between items-center bg-zinc-950 border-b border-zinc-900 px-4 py-2 shrink-0">
           <div className="flex items-center gap-4">
-              <h2 className="text-xs font-semibold tracking-wide text-slate-400">ANALIZADOR (RTA)</h2>
+              <h2 className="text-[10px] font-bold tracking-[0.2em] text-zinc-500 uppercase">ANALYZER (RTA)</h2>
               
-              <div className="bg-slate-900 border border-slate-700 rounded px-3 py-1 flex items-center gap-2 cursor-pointer text-xs">
+              <div className="bg-black border border-zinc-800 flex items-center gap-2 cursor-pointer text-[10px] font-mono px-2 py-0.5 max-w-[200px]">
                 <Select value={selectedDeviceId} onValueChange={(val) => { if (val) setSelectedDeviceId(val); }}>
-                  <SelectTrigger className="border-none bg-transparent h-auto p-0 focus:ring-0 gap-2 font-mono text-slate-200">
-                    <SelectValue placeholder="Seleccionar Interfaz" />
+                  <SelectTrigger className="border-none bg-transparent h-auto p-0 focus:ring-0 gap-2 text-slate-300 w-full overflow-hidden">
+                    <SelectValue placeholder="I/O DEVICE">
+                      {selectedDeviceId 
+                        ? (() => {
+                            const idx = devices.findIndex(d => d.deviceId === selectedDeviceId);
+                            if (idx === -1) return "I/O DEVICE";
+                            const label = devices[idx].label;
+                            if (!label) return `INPUT ${idx + 1}`;
+                            let clean = label.replace(/\s*\([a-fA-F0-9-]{16,}\)/g, '');
+                            clean = clean.replace(/^Default\s*-\s*/i, '');
+                            if (clean.length > 25) clean = clean.substring(0, 22) + '...';
+                            return clean.toUpperCase();
+                          })()
+                        : "I/O DEVICE"}
+                    </SelectValue>
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700 text-slate-300">
-                    {devices.map((device) => (
-                      <SelectItem key={device.deviceId} value={device.deviceId} className="text-xs focus:bg-slate-700 cursor-pointer">
-                        {device.label || `Dispositivo ${device.deviceId.substring(0,5)}`}
-                      </SelectItem>
-                    ))}
+                  <SelectContent className="bg-black border-zinc-800 text-slate-300 rounded-none w-[200px]">
+                    {devices.map((device, i) => {
+                      let cleanLabel = device.label || `INPUT ${i + 1}`;
+                      if (device.label) {
+                          cleanLabel = cleanLabel.replace(/\s*\([a-fA-F0-9-]{16,}\)/g, '');
+                          cleanLabel = cleanLabel.replace(/^Default\s*-\s*/i, '');
+                          if (cleanLabel.length > 25) cleanLabel = cleanLabel.substring(0, 22) + '...';
+                      }
+                      
+                      return (
+                        <SelectItem key={device.deviceId} value={device.deviceId} className="text-[10px] focus:bg-zinc-800 cursor-pointer rounded-none">
+                          {cleanLabel.toUpperCase()}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
           </div>
-          <div className="flex items-center gap-2">
-              <div className="bg-slate-900 border border-slate-700 rounded px-3 py-1 flex items-center gap-2 cursor-pointer text-xs">
-                  FFT <ChevronDown className="w-3 h-3 text-slate-500" />
-              </div>
+          <div className="flex items-center gap-1">
+              <button 
+                  onClick={() => setDrawMode(m => m === 'BARS' ? 'CURVE' : 'BARS')}
+                  className="bg-black border border-zinc-800 flex items-center gap-2 text-[10px] font-mono px-2 py-0.5 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors cursor-pointer"
+              >
+                  MODE: {drawMode}
+              </button>
               <button
                 onClick={toggleListening}
-                className={isListening ? "border border-red-500 text-red-500 hover:bg-red-500/10 px-3 py-1 rounded text-xs transition-colors h-auto" : "border border-brand text-brand hover:bg-brand/10 px-3 py-1 rounded text-xs transition-colors h-auto"}
+                className={isListening ? "border border-red-500 text-red-500 hover:bg-red-500/10 px-3 py-0.5 text-[10px] font-bold font-mono transition-colors" : "border border-emerald-500 text-emerald-500 hover:bg-emerald-500/10 px-3 py-0.5 text-[10px] font-bold font-mono transition-colors"}
               >
-                {isListening ? "DETENER" : "ESCUCHAR"}
+                {isListening ? "STOP" : "RUN"}
               </button>
-              <button className="border border-brand text-brand hover:bg-brand/10 px-3 py-1 rounded text-xs transition-colors">INSPECTOR</button>
-              <button className="w-7 h-7 rounded bg-slate-700 flex items-center justify-center text-slate-300 hover:bg-slate-600"><Expand className="w-3 h-3 text-xs" /></button>
+              <button 
+                  onClick={toggleFullscreen}
+                  className="w-6 h-6 border border-zinc-800 bg-black flex items-center justify-center text-zinc-400 hover:bg-zinc-800 transition-colors"
+                  title="Fullscreen RTA"
+              >
+                  <Expand className="w-3 h-3 text-xs" />
+              </button>
           </div>
       </div>
 
       {/* Gráficos Principales */}
-      <div className="flex-1 flex flex-col gap-4 relative min-h-0">
+      <div className="flex-1 flex flex-col relative min-h-0">
           {/* Line Chart (EQ/FFT) */}
-          <div className="flex-1 relative border border-slate-700/50 rounded bg-slate-900/30 overflow-hidden">
+          <div className="flex-1 relative border-b border-zinc-900 overflow-hidden bg-black">
               <canvas ref={canvasRef} className="w-full h-full block" />
               
               {!isListening && (
-                <div className="absolute inset-0 bg-[#0B0F15]/80 backdrop-blur-sm flex items-center justify-center">
+                <div className="absolute inset-0 flex items-center justify-center bg-black/80">
                   <div className="text-center">
-                    <Settings2 className="w-8 h-8 text-slate-700 mx-auto mb-2 opacity-50" />
-                    <p className="text-[10px] font-mono text-slate-500">ESPERANDO SEÑAL DE HARDWARE</p>
+                    <Settings2 className="w-6 h-6 text-zinc-600 mx-auto mb-2 opacity-50" />
+                    <p className="text-[10px] font-mono text-zinc-500 tracking-[0.2em]">WAITING HARDWARE SYNC</p>
                   </div>
                 </div>
               )}
 
-              {/* Medidores laterales dentro del gráfico */}
-              <div className="absolute right-4 top-4 bottom-4 w-12 flex justify-between pointer-events-none">
-                    <div className="flex flex-col justify-end gap-0.5 h-full w-4">
+              {/* Medidores laterales calibrados estilo M32 */}
+              <div className="absolute right-4 top-4 bottom-4 w-16 flex justify-between pointer-events-none opacity-90 bg-black/50 p-1 border border-zinc-900 rounded-sm" ref={meterContainerRef}>
+                    {/* Left Meter (RMS) */}
+                    <div className="flex flex-col-reverse justify-between gap-[1px] h-full w-3 meter-left">
                       {Array.from({ length: 40 }).map((_, i) => (
-                        <div key={i} className={`w-full h-1 rounded-sm opacity-80 ${i < 20 ? 'bg-brand' : i < 27 ? 'bg-yellow-500' : i < 30 ? 'bg-red-500' : 'bg-slate-700'}`} />
+                        <div key={i} className="w-full flex-1 bg-zinc-800" />
                       ))}
                     </div>
-                    <div className="flex flex-col justify-end gap-0.5 h-full w-4">
+                    
+                    {/* dB Scale central */}
+                    <div className="flex flex-col justify-between items-center text-[8px] font-bold font-mono text-zinc-500 h-full py-[2px]">
+                        <span className="text-red-500">CLIP</span>
+                        <span>-10</span>
+                        <span>-20</span>
+                        <span>-30</span>
+                        <span>-40</span>
+                        <span>-50</span>
+                        <span>-60</span>
+                    </div>
+
+                    {/* Right Meter (PEAK) */}
+                    <div className="flex flex-col-reverse justify-between gap-[1px] h-full w-3 meter-right">
                        {Array.from({ length: 40 }).map((_, i) => (
-                        <div key={i} className={`w-full h-1 rounded-sm opacity-80 ${i < 20 ? 'bg-brand' : i < 27 ? 'bg-yellow-500' : i < 30 ? 'bg-red-500' : 'bg-slate-700'}`} />
+                        <div key={i} className="w-full flex-1 bg-zinc-800" />
                       ))}
                     </div>
               </div>
-              <div className="absolute right-2 top-2 text-xxs text-slate-500 flex gap-4 pointer-events-none">
-                  <span>IN</span><span>OUT</span><span className="text-slate-600">dB</span>
+              <div className="absolute right-4 top-1 text-[8px] font-bold font-mono text-zinc-600 flex gap-4 w-16 justify-between pointer-events-none">
+                  <span>RMS</span><span>PK</span>
               </div>
           </div>
           
           {/* Espectrograma Real (Waterfall) Hardware Accelerated */}
-          <div className="h-1/3 border border-slate-700/50 rounded bg-[#0B0F15] relative overflow-hidden flex flex-col justify-between p-1">
+          <div className="h-[30%] border-b border-zinc-900 bg-black relative overflow-hidden flex flex-col justify-between">
               <canvas ref={waterfallCanvasRef} className="absolute inset-0 w-full h-full block z-0" />
               
               {/* Overlays de Tiempo */}
