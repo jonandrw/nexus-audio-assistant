@@ -13,7 +13,7 @@ interface EqBand {
   q: number;
 }
 
-export function EqPanel() {
+export function EqPanel({ activeChannelId }: { activeChannelId: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   
   const [bands, setBands] = useState<EqBand[]>([
@@ -40,9 +40,9 @@ export function EqPanel() {
           const minLog = Math.log10(20);
           const maxLog = Math.log10(20000);
           const normalizedFreq = (Math.log10(b.freq) - minLog) / (maxLog - minLog);
-          await sendOscCommand(`/ch/01/eq/${b.id}/g`, [normalizedGain]);
-          await sendOscCommand(`/ch/01/eq/${b.id}/f`, [normalizedFreq]);
-          await sendOscCommand(`/ch/01/eq/${b.id}/q`, [b.q / 10]);
+          await sendOscCommand(`/ch/${activeChannelId}/eq/${b.id}/g`, [normalizedGain]);
+          await sendOscCommand(`/ch/${activeChannelId}/eq/${b.id}/f`, [normalizedFreq]);
+          await sendOscCommand(`/ch/${activeChannelId}/eq/${b.id}/q`, [b.q / 10]);
       }
       setShowMenu(false);
   };
@@ -130,9 +130,9 @@ export function EqPanel() {
       const maxLog = Math.log10(20000);
       const normalizedFreq = (Math.log10(b.freq) - minLog) / (maxLog - minLog);
       
-      await sendOscCommand(`/ch/01/eq/${b.id}/g`, [normalizedGain]);
-      await sendOscCommand(`/ch/01/eq/${b.id}/f`, [normalizedFreq]);
-      await sendOscCommand(`/ch/01/eq/${b.id}/q`, [b.q / 10]);
+      await sendOscCommand(`/ch/${activeChannelId}/eq/${b.id}/g`, [normalizedGain]);
+      await sendOscCommand(`/ch/${activeChannelId}/eq/${b.id}/f`, [normalizedFreq]);
+      await sendOscCommand(`/ch/${activeChannelId}/eq/${b.id}/q`, [b.q / 10]);
   };
 
   const handlePointerUp = async (e: React.PointerEvent) => {

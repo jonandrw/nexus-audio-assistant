@@ -6,7 +6,7 @@ import { useAudioStore } from "@/lib/audio-store";
 import { sendOscCommand } from "@/lib/osc-client";
 import { DraggableValue } from "./DraggableValue";
 
-export function DynamicsPanel() {
+export function DynamicsPanel({ activeChannelId }: { activeChannelId: string }) {
   const circleRef = useRef<SVGCircleElement>(null);
   const textRef = useRef<HTMLSpanElement>(null);
   const [isClipping, setIsClipping] = useState(false);
@@ -14,7 +14,7 @@ export function DynamicsPanel() {
   
   const resetGate = async () => {
       setGateThr(-60); // min threshold effectively bypasses gate
-      await sendOscCommand('/ch/01/dyn/thr', [0]); // -60dB -> 0.0
+      await sendOscCommand(`/ch/${activeChannelId}/dyn/thr`, [0]); // -60dB -> 0.0
       setShowMenu(false);
   };
   const [gateThr, setGateThr] = useState(-42.0);
@@ -117,14 +117,14 @@ export function DynamicsPanel() {
                         onChange={setGateThr}
                         onComplete={async (val) => {
                             const normalizedGate = (val + 80) / 80;
-                            await sendOscCommand('/ch/01/gate/thr', [normalizedGate]);
+                            await sendOscCommand(`/ch/${activeChannelId}/gate/thr`, [normalizedGate]);
                         }}
                         className="text-[10px] font-mono text-zinc-400 font-bold"
                     />
                 </div>
                 <div className="bg-black py-1">
                     <div className="text-[8px] text-zinc-500 font-mono">KEY SRC</div>
-                    <div className="text-[10px] font-mono text-emerald-500 font-bold cursor-pointer hover:text-white transition-colors">CH 01</div>
+                    <div className="text-[10px] font-mono text-emerald-500 font-bold cursor-pointer hover:text-white transition-colors">CH {activeChannelId}</div>
                 </div>
             </div>
         </div>

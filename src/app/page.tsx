@@ -9,6 +9,7 @@ import { BottomBar } from "@/components/dashboard/BottomBar";
 import { DynamicsPanel } from "@/components/dashboard/DynamicsPanel";
 import { EqPanel } from "@/components/dashboard/EqPanel";
 import { CompPanel } from "@/components/dashboard/CompPanel";
+import { PreampPanel } from "@/components/dashboard/PreampPanel";
 import { EventLog } from "@/components/dashboard/EventLog";
 import { NetworkPanel } from "@/components/dashboard/NetworkPanel";
 import { AudioEngineProvider } from "@/lib/audio-context";
@@ -73,9 +74,10 @@ export default function DashboardPage() {
             </div>
             
             <div className="h-56 flex shrink-0 overflow-hidden border-t border-zinc-900 bg-zinc-950">
-              <div className="flex-1 border-r border-zinc-900 flex"><DynamicsPanel /></div>
-              <div className="flex-1 border-r border-zinc-900 flex"><EqPanel /></div>
-              <div className="flex-1 flex"><CompPanel /></div>
+              <div className="flex-1 border-r border-zinc-900 flex"><PreampPanel activeChannelId={activeChannelId || "01"} /></div>
+              <div className="flex-1 border-r border-zinc-900 flex"><DynamicsPanel activeChannelId={activeChannelId || "01"} /></div>
+              <div className="flex-1 border-r border-zinc-900 flex"><EqPanel activeChannelId={activeChannelId || "01"} /></div>
+              <div className="flex-1 flex"><CompPanel activeChannelId={activeChannelId || "01"} /></div>
             </div>
           </section>
 

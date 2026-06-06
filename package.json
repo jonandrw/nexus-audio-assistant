@@ -1,11 +1,13 @@
 {
   "name": "nexus-audio-assistant",
   "version": "0.1.0",
+  "main": "main.js",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "build:app": "next build && electron-builder",
     "lint": "eslint"
   },
   "dependencies": {
@@ -34,5 +36,17 @@
     "eslint-config-next": "16.2.7",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "build": {
+    "appId": "com.nexus.foh",
+    "productName": "Nexus Audio Assistant",
+    "directories": {
+      "output": "dist-app"
+    },
+    "win": {
+      "target": [
+        "portable"
+      ]
+    }
   }
 }

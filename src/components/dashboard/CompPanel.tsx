@@ -6,7 +6,7 @@ import { useAudioStore } from "@/lib/audio-store";
 import { sendOscCommand } from "@/lib/osc-client";
 import { DraggableValue } from "./DraggableValue";
 
-export function CompPanel() {
+export function CompPanel({ activeChannelId }: { activeChannelId: string }) {
   const [thresholdDb, setThresholdDb] = useState(-20);
   const [ratio, setRatio] = useState(4);
   const [attack, setAttack] = useState(12);
@@ -20,10 +20,10 @@ export function CompPanel() {
       setRatio(1);
       setAttack(12);
       setRelease(150);
-      await sendOscCommand('/ch/01/dyn/thr', [1]); // 0dB
-      await sendOscCommand('/ch/01/dyn/ratio', [0.01]);
-      await sendOscCommand('/ch/01/dyn/atk', [0.12]);
-      await sendOscCommand('/ch/01/dyn/rel', [0.15]);
+      await sendOscCommand(`/ch/${activeChannelId}/dyn/thr`, [1]); // 0dB
+      await sendOscCommand(`/ch/${activeChannelId}/dyn/ratio`, [0.01]);
+      await sendOscCommand(`/ch/${activeChannelId}/dyn/atk`, [0.12]);
+      await sendOscCommand(`/ch/${activeChannelId}/dyn/rel`, [0.15]);
       setShowMenu(false);
   };
   
@@ -94,7 +94,7 @@ export function CompPanel() {
       (e.target as Element).releasePointerCapture(e.pointerId);
       
       const normalizedThr = (thresholdDb + 60) / 60;
-      await sendOscCommand('/ch/01/dyn/thr', [normalizedThr]);
+      await sendOscCommand(`/ch/${activeChannelId}/dyn/thr`, [normalizedThr]);
     }
   };
 
@@ -166,7 +166,7 @@ export function CompPanel() {
                     <DraggableValue 
                         value={thresholdDb} min={-60} max={0} step={0.5}
                         onChange={setThresholdDb}
-                        onComplete={async (val) => await sendOscCommand('/ch/01/dyn/thr', [(val + 60) / 60])}
+                        onComplete={async (val) => await sendOscCommand(`/ch/${activeChannelId}/dyn/thr`, [(val + 60) / 60])}
                         className="text-[10px] font-mono text-emerald-500 font-bold"
                     />
                 </div>
@@ -175,7 +175,7 @@ export function CompPanel() {
                     <DraggableValue 
                         value={ratio} min={1} max={100} step={1}
                         onChange={setRatio}
-                        onComplete={async (val) => await sendOscCommand('/ch/01/dyn/ratio', [val / 100])}
+                        onComplete={async (val) => await sendOscCommand(`/ch/${activeChannelId}/dyn/ratio`, [val / 100])}
                         format={(val) => `${val.toFixed(1)}:1`}
                         className="text-[10px] font-mono text-zinc-300"
                     />
@@ -192,7 +192,7 @@ export function CompPanel() {
                     <DraggableValue 
                         value={attack} min={1} max={100} step={1}
                         onChange={setAttack}
-                        onComplete={async (val) => await sendOscCommand('/ch/01/dyn/atk', [val / 100])}
+                        onComplete={async (val) => await sendOscCommand(`/ch/${activeChannelId}/dyn/atk`, [val / 100])}
                         format={(val) => `${val}ms`}
                         className="text-[10px] font-mono text-zinc-300"
                     />
@@ -211,7 +211,7 @@ export function CompPanel() {
                     <DraggableValue 
                         value={release} min={10} max={1000} step={10}
                         onChange={setRelease}
-                        onComplete={async (val) => await sendOscCommand('/ch/01/dyn/rel', [val / 1000])}
+                        onComplete={async (val) => await sendOscCommand(`/ch/${activeChannelId}/dyn/rel`, [val / 1000])}
                         format={(val) => `${val}ms`}
                         className="text-[10px] font-mono text-zinc-300"
                     />
