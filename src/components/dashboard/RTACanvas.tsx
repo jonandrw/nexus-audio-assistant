@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
-import { Headphones, Play, Square, Settings2, ChevronDown, Expand, MicOff } from "lucide-react";
+import { Settings2, ChevronDown, Expand } from "lucide-react";
 import { Channel } from "./ChannelList";
 import {
   Select,
@@ -11,6 +11,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAudioEngine } from "@/lib/audio-context";
+import { FeedbackDetector, MaskingDetector, calculateRMS } from "@/lib/audio-analyzer";
+import { useAIStore } from "@/lib/ai-store";
+import { useAudioStore } from "@/lib/audio-store";
 
 interface RTACanvasProps {
   activeChannel: Channel | null;
@@ -18,19 +21,27 @@ interface RTACanvasProps {
 
 export function RTACanvas({ activeChannel }: RTACanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const waterfallCanvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const detectorRef = useRef<FeedbackDetector>(new FeedbackDetector());
+  const maskingDetectorRef = useRef<MaskingDetector>(new MaskingDetector());
+  const addAlert = useAIStore(state => state.addAlert);
+  const setRmsLevel = useAudioStore(state => state.setRmsLevel);
   
   const { 
     isListening, devices, selectedDeviceId, setSelectedDeviceId, 
-    toggleListening, getFrequencyData 
+    toggleListening, getFrequencyData, getSampleRate, getFloatTimeDomainData
   } = useAudioEngine();
 
   // Drawing the canvas
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const waterfallCanvas = waterfallCanvasRef.current;
+    if (!canvas || !waterfallCanvas) return;
+    
+    const ctx = canvas.getContext("2d", { alpha: false });
+    const waterfallCtx = waterfallCanvas.getContext("2d", { alpha: false });
+    if (!ctx || !waterfallCtx) return;
 
     let dpr = window.devicePixelRatio || 1;
 
@@ -60,21 +71,60 @@ export function RTACanvas({ activeChannel }: RTACanvasProps) {
     };
 
     const dataArray = new Uint8Array(4096 / 2);
+    const floatTimeData = new Float32Array(4096 / 2);
 
     const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
       const w = canvas.width / dpr;
       const h = canvas.height / dpr;
-
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       renderBackgroundAndGrid(w, h);
 
       if (isListening) {
         getFrequencyData(dataArray);
+        getFloatTimeDomainData(floatTimeData);
+
+        // --- Cálculo de Dinámicas (RMS Centralizado) ---
+        const rmsDb = calculateRMS(floatTimeData);
+        setRmsLevel(rmsDb);
+
+        // --- Análisis DSP en tiempo real (Zustand) ---
+        const alert = detectorRef.current.analyze(dataArray, getSampleRate());
+        if (alert) {
+          const freq = Math.round(alert.frequencyHz);
+          const channelStr = activeChannel ? activeChannel.number.toString().padStart(2, '0') : "01";
+          
+          addAlert({
+             id: `alert-${Date.now()}-${freq}`,
+             type: "alert",
+             title: "¡Riesgo de Acople!",
+             description: alert.message,
+             actionText: `Cortar -7.5dB`,
+             targetChannel: channelStr,
+             targetFreq: freq
+          });
+        }
+
+        // --- Detección de Enmascaramiento (Masking) ---
+        // Clonamos el buffer simulando un segundo canal compitiendo en graves (60-250Hz)
+        const dummyData2 = new Uint8Array(dataArray); 
+        const maskingAlert = maskingDetectorRef.current.analyze(dataArray, dummyData2, getSampleRate());
+        
+        if (maskingAlert) {
+          addAlert({
+             id: `masking-${Date.now()}-${maskingAlert.targetFreq}`,
+             type: "masking",
+             title: maskingAlert.title,
+             description: maskingAlert.description,
+             actionText: maskingAlert.actionText,
+             targetChannel: "01",
+             targetFreq: maskingAlert.targetFreq
+          });
+        }
 
         const gradient = ctx.createLinearGradient(0, h, 0, 0);
-        gradient.addColorStop(0, "rgba(34, 197, 94, 0.4)"); // emerald-500
-        gradient.addColorStop(0.6, "rgba(234, 179, 8, 0.5)"); // yellow-500
-        gradient.addColorStop(1, "rgba(239, 68, 68, 0.6)"); // red-500
+        gradient.addColorStop(0, "rgba(34, 197, 94, 0.4)"); 
+        gradient.addColorStop(0.6, "rgba(234, 179, 8, 0.5)"); 
+        gradient.addColorStop(1, "rgba(239, 68, 68, 0.6)"); 
 
         ctx.fillStyle = gradient;
 
@@ -86,6 +136,43 @@ export function RTACanvas({ activeChannel }: RTACanvasProps) {
           const barHeight = (dataArray[i] / 255) * h;
           ctx.fillRect(x, h - barHeight, barWidth, barHeight);
           x += barWidth + 1;
+        }
+
+        // --- Espectrograma Waterfall (Hardware Accelerated) ---
+        const wfW = waterfallCanvas.width / dpr;
+        const wfH = waterfallCanvas.height / dpr;
+
+        // 1. Desplazar hacia abajo 1 píxel todo el lienzo existente (Ultra rápido, 0 coste de RAM)
+        waterfallCtx.drawImage(
+          waterfallCanvas, 
+          0, 0, wfW * dpr, (wfH - 1) * dpr, 
+          0, 1 * dpr, wfW * dpr, (wfH - 1) * dpr
+        );
+
+        // 2. Dibujar la nueva línea de frecuencias en Y = 0
+        const wfBarWidth = (wfW * dpr) / bufferLength;
+        for (let i = 0; i < bufferLength; i++) {
+          const val = dataArray[i];
+          let r = 0, g = 0, b = 0;
+          
+          if (val < 50) {
+            // Silencio (Negro)
+            r = 11; g = 15; b = 21; // #0B0F15 base background
+          } else if (val < 120) {
+            // Negro a Verde
+            g = Math.floor(((val - 50) / 70) * 180);
+          } else if (val < 200) {
+            // Verde a Amarillo
+            g = 180 + Math.floor(((val - 120) / 80) * 75);
+            r = Math.floor(((val - 120) / 80) * 255);
+          } else {
+            // Amarillo a Rojo Intenso
+            r = 255;
+            g = 255 - Math.floor(((val - 200) / 55) * 255);
+          }
+          
+          waterfallCtx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+          waterfallCtx.fillRect(i * wfBarWidth, 0, Math.ceil(wfBarWidth), 1 * dpr);
         }
       }
 
@@ -102,9 +189,22 @@ export function RTACanvas({ activeChannel }: RTACanvasProps) {
         canvas.style.width = `${parent.clientWidth}px`;
         canvas.style.height = `${parent.clientHeight}px`;
       }
+      const wfParent = waterfallCanvas.parentElement;
+      if (wfParent) {
+        dpr = window.devicePixelRatio || 1;
+        waterfallCanvas.width = wfParent.clientWidth * dpr;
+        waterfallCanvas.height = wfParent.clientHeight * dpr;
+        waterfallCanvas.style.width = `${wfParent.clientWidth}px`;
+        waterfallCanvas.style.height = `${wfParent.clientHeight}px`;
+        
+        // Rellenar fondo inicial
+        waterfallCtx.fillStyle = "#0B0F15";
+        waterfallCtx.fillRect(0, 0, waterfallCanvas.width, waterfallCanvas.height);
+      }
     });
 
     resizeObserver.observe(canvas.parentElement!);
+    resizeObserver.observe(waterfallCanvas.parentElement!);
     draw();
 
     return () => {
@@ -113,7 +213,7 @@ export function RTACanvas({ activeChannel }: RTACanvasProps) {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [isListening, getFrequencyData]); 
+  }, [isListening, getFrequencyData, getSampleRate, activeChannel, addAlert]); 
 
   return (
     <div className="panel flex-1 flex flex-col p-4 min-h-0">
@@ -184,16 +284,15 @@ export function RTACanvas({ activeChannel }: RTACanvasProps) {
               </div>
           </div>
           
-          {/* Espectrograma simulado */}
-          <div className="h-1/3 border border-slate-700/50 rounded bg-slate-900/30 relative overflow-hidden flex flex-col justify-between p-1">
-              <div className="absolute inset-0 opacity-80" style={{background: 'repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(34,197,94,0.1) 2px, rgba(34,197,94,0.1) 4px), linear-gradient(180deg, rgba(2,6,23,1) 0%, rgba(13,148,136,0.5) 40%, rgba(234,179,8,0.8) 50%, rgba(13,148,136,0.5) 60%, rgba(2,6,23,1) 100%)', filter: 'blur(1px)'}}>
-              </div>
-              <div className="absolute inset-0 opacity-40 mix-blend-screen" style={{backgroundImage: "url('data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'100\\' height=\\'100\\'><filter id=\\'n\\'><feTurbulence type=\\'fractalNoise\\' baseFrequency=\\'0.8\\' numOctaves=\\'3\\' stitchTiles=\\'stitch\\'/></filter><rect width=\\'100\\' height=\\'100\\' filter=\\'url(%23n)\\' opacity=\\'0.5\\'/></svg>')"}}></div>
+          {/* Espectrograma Real (Waterfall) Hardware Accelerated */}
+          <div className="h-1/3 border border-slate-700/50 rounded bg-[#0B0F15] relative overflow-hidden flex flex-col justify-between p-1">
+              <canvas ref={waterfallCanvasRef} className="absolute inset-0 w-full h-full block z-0" />
               
-              <div className="relative z-10 flex justify-between text-xxs text-slate-500 font-mono px-2 pt-1"><span>20k</span><span>0 s</span></div>
-              <div className="relative z-10 flex justify-between text-xxs text-slate-500 font-mono px-2"><span>2k</span><span>-2 s</span></div>
-              <div className="relative z-10 flex justify-between text-xxs text-slate-500 font-mono px-2"><span>200</span><span>-4 s</span></div>
-              <div className="relative z-10 flex justify-between text-xxs text-slate-500 font-mono px-2 pb-1"><span>20</span><span>-6 s</span></div>
+              {/* Overlays de Tiempo */}
+              <div className="relative z-10 flex justify-between text-xxs text-slate-500 font-mono px-2 pt-1 pointer-events-none mix-blend-difference"><span>20k</span><span>0 s</span></div>
+              <div className="relative z-10 flex justify-between text-xxs text-slate-500 font-mono px-2 pointer-events-none mix-blend-difference"><span>2k</span><span>-2 s</span></div>
+              <div className="relative z-10 flex justify-between text-xxs text-slate-500 font-mono px-2 pointer-events-none mix-blend-difference"><span>200</span><span>-4 s</span></div>
+              <div className="relative z-10 flex justify-between text-xxs text-slate-500 font-mono px-2 pb-1 pointer-events-none mix-blend-difference"><span>20</span><span>-6 s</span></div>
           </div>
       </div>
     </div>

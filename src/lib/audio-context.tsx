@@ -1,8 +1,4 @@
-"use client";
-
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
-import { FeedbackDetector, ResonanceAlert } from "./audio-analyzer";
-import { toast } from "sonner";
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 
 interface AudioEngineState {
   isListening: boolean;
@@ -10,9 +6,10 @@ interface AudioEngineState {
   selectedDeviceId: string;
   setSelectedDeviceId: (id: string) => void;
   toggleListening: () => void;
-  getFrequencyData: (array: Uint8Array) => void;
-  getTimeDomainData: (array: Uint8Array) => void;
-  sampleRate: number;
+  getFrequencyData: (dataArray: Uint8Array) => void;
+  getTimeDomainData: (dataArray: Uint8Array) => void;
+  getFloatTimeDomainData: (dataArray: Float32Array) => void;
+  getSampleRate: () => number;
 }
 
 const AudioEngineContext = createContext<AudioEngineState | null>(null);
@@ -24,116 +21,98 @@ export function AudioEngineProvider({ children }: { children: React.ReactNode })
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const detectorRef = useRef<FeedbackDetector>(new FeedbackDetector());
-  const aiIntervalRef = useRef<number | null>(null);
-
-  const cleanAudioEngine = async () => {
-    if (aiIntervalRef.current) window.clearInterval(aiIntervalRef.current);
-    if (sourceRef.current) {
-      sourceRef.current.disconnect();
-      sourceRef.current = null;
-    }
-    if (analyserRef.current) {
-      analyserRef.current.disconnect();
-      analyserRef.current = null;
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-    }
-    if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
-      await audioCtxRef.current.close();
-      audioCtxRef.current = null;
-    }
-  };
-
-  const getAudioDevices = async () => {
-    try {
-      const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      tempStream.getTracks().forEach(t => t.stop());
-      const deviceList = await navigator.mediaDevices.enumerateDevices();
-      const inputs = deviceList.filter(d => d.kind === 'audioinput');
-      setDevices(inputs);
-      if (inputs.length > 0 && selectedDeviceId === "default") {
-        setSelectedDeviceId(inputs[0].deviceId);
-      }
-    } catch (e) {
-      toast.error("Error accessing audio devices. Please check permissions.");
-    }
-  };
 
   useEffect(() => {
-    getAudioDevices();
-    navigator.mediaDevices.addEventListener('devicechange', getAudioDevices);
-    return () => navigator.mediaDevices.removeEventListener('devicechange', getAudioDevices);
-  }, []);
-
-  useEffect(() => {
-    if (isListening) restartAudioEngine(selectedDeviceId);
-  }, [selectedDeviceId]);
-
-  const restartAudioEngine = async (deviceId: string) => {
-    await cleanAudioEngine();
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { deviceId: { exact: deviceId } }
-      });
-      streamRef.current = stream;
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      audioCtxRef.current = ctx;
-      
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 4096;
-      analyser.smoothingTimeConstant = 0.8;
-      analyserRef.current = analyser;
-      
-      const source = ctx.createMediaStreamSource(stream);
-      sourceRef.current = source;
-      source.connect(analyser);
-
-      // AI Analysis Loop independent of React UI
-      aiIntervalRef.current = window.setInterval(() => {
-        if (!analyserRef.current || !audioCtxRef.current) return;
-        const data = new Uint8Array(analyserRef.current.frequencyBinCount);
-        analyserRef.current.getByteFrequencyData(data);
-        const alert = detectorRef.current.analyze(data, audioCtxRef.current.sampleRate);
-        if (alert) {
-           window.dispatchEvent(new CustomEvent("nexus-ai-alert", { detail: alert }));
+    async function getDevices() {
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        const allDevices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = allDevices.filter(d => d.kind === 'audioinput');
+        setDevices(audioInputs);
+        if (audioInputs.length > 0 && selectedDeviceId === "default") {
+          setSelectedDeviceId(audioInputs[0].deviceId);
         }
-      }, 250) as unknown as number;
-
-    } catch (err) {
-      toast.error("Hardware disconnected or in use.");
-      setIsListening(false);
-      await cleanAudioEngine();
+      } catch (err) {
+        console.error("No se pudo acceder a los dispositivos de audio.", err);
+      }
     }
-  };
+    getDevices();
+  }, [selectedDeviceId]);
 
   const toggleListening = async () => {
     if (isListening) {
-      await cleanAudioEngine();
+      if (sourceRef.current) sourceRef.current.disconnect();
+      if (audioCtxRef.current) await audioCtxRef.current.close();
+      sourceRef.current = null;
+      audioCtxRef.current = null;
+      analyserRef.current = null;
       setIsListening(false);
     } else {
-      setIsListening(true);
-      await restartAudioEngine(selectedDeviceId);
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            deviceId: selectedDeviceId !== "default" ? { exact: selectedDeviceId } : undefined,
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+          }
+        });
+
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        audioCtxRef.current = ctx;
+
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 4096;
+        analyser.smoothingTimeConstant = 0.8;
+        analyserRef.current = analyser;
+
+        const source = ctx.createMediaStreamSource(stream);
+        source.connect(analyser);
+        sourceRef.current = source;
+
+        setIsListening(true);
+      } catch (err) {
+        console.error("Error al iniciar el motor de audio:", err);
+      }
     }
   };
 
-  const getFrequencyData = (array: Uint8Array) => {
-    if (analyserRef.current && isListening) analyserRef.current.getByteFrequencyData(array);
-  };
-  
-  const getTimeDomainData = (array: Uint8Array) => {
-    if (analyserRef.current && isListening) analyserRef.current.getByteTimeDomainData(array);
-  };
+  const getFrequencyData = useCallback((dataArray: Uint8Array) => {
+    if (analyserRef.current) {
+      analyserRef.current.getByteFrequencyData(dataArray);
+    }
+  }, []);
+
+  const getTimeDomainData = useCallback((dataArray: Uint8Array) => {
+    if (analyserRef.current) {
+      analyserRef.current.getByteTimeDomainData(dataArray);
+    }
+  }, []);
+
+  const getFloatTimeDomainData = useCallback((dataArray: Float32Array) => {
+    if (analyserRef.current) {
+      analyserRef.current.getFloatTimeDomainData(dataArray);
+    }
+  }, []);
+
+  const getSampleRate = useCallback(() => {
+    return audioCtxRef.current ? audioCtxRef.current.sampleRate : 48000;
+  }, []);
+
+  // Limpieza general
+  useEffect(() => {
+    return () => {
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close();
+      }
+    };
+  }, []);
 
   return (
     <AudioEngineContext.Provider value={{
-      isListening, devices, selectedDeviceId, setSelectedDeviceId,
-      toggleListening, getFrequencyData, getTimeDomainData,
-      sampleRate: audioCtxRef.current?.sampleRate || 48000
+      isListening, devices, selectedDeviceId, setSelectedDeviceId, toggleListening, 
+      getFrequencyData, getTimeDomainData, getFloatTimeDomainData, getSampleRate
     }}>
       {children}
     </AudioEngineContext.Provider>
@@ -141,7 +120,7 @@ export function AudioEngineProvider({ children }: { children: React.ReactNode })
 }
 
 export function useAudioEngine() {
-  const ctx = useContext(AudioEngineContext);
-  if (!ctx) throw new Error("useAudioEngine must be used within AudioEngineProvider");
-  return ctx;
+  const context = useContext(AudioEngineContext);
+  if (!context) throw new Error("useAudioEngine must be used within an AudioEngineProvider");
+  return context;
 }

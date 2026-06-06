@@ -1,6 +1,7 @@
 import React from "react";
-import { Mic, Mic2, Plus, MoreVertical, ChevronDown, Music } from "lucide-react";
+import { Mic, Mic2, Plus, MoreVertical, Music } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SceneManager } from "./SceneManager";
 
 export interface Channel {
   id: string;
@@ -108,18 +109,7 @@ export function ChannelList({ channels, activeChannelId, onSelectChannel, onTogg
         </div>
       </div>
 
-      {/* Scene Panel */}
-      <div className="panel p-4 h-32 flex flex-col shrink-0">
-        <h2 className="panel-header mb-3 pb-3">ESCENA</h2>
-        <div className="flex items-center gap-2">
-          <div className="flex-1 bg-slate-900 border border-slate-700 rounded p-2 flex justify-between items-center cursor-pointer">
-            <span className="text-sm text-slate-200">Servicio Dominical</span>
-            <ChevronDown className="text-slate-500 w-3 h-3" />
-          </div>
-          <button className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded text-xs font-medium transition-colors">GUARDAR</button>
-        </div>
-        <div className="text-xxs text-slate-500 mt-2">Guardado: Hace 2 min</div>
-      </div>
+      <SceneManager />
     </div>
   );
 }

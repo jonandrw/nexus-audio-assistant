@@ -135,8 +135,19 @@
 }
 
 @layer base {
+  :root {
+    /* Fondo estilo "Monster": negro matizado profundo */
+    --background: 240 10% 4%; 
+    --card: 240 5% 8%;
+    
+    /* Verde neón "Energy" suave */
+    --primary: 142 71% 45%;
+    --primary-foreground: 0 0% 0%;
+  }
+
   * {
     @apply border-border outline-ring/50;
+    border-radius: 0px !important;
   }
   body {
     @apply bg-background text-foreground;
@@ -164,7 +175,7 @@
   
   /* MixVision Pro Utility Classes */
   .panel {
-    @apply bg-slate-800 border border-slate-700 rounded-lg;
+    @apply bg-black border border-zinc-800 rounded-none;
   }
   
   .panel-header {

@@ -6,13 +6,18 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, CheckCircle2, Loader2, Zap } from "lucide-react";
 import { sendOscCommand } from "@/lib/osc-client";
+import { useAIStore } from "@/lib/ai-store";
 
+// 1. Ampliamos la interfaz para recibir datos dinámicos del motor DSP
 export interface AISuggestion {
   id: string;
   type: "alert" | "masking" | "optimization";
   title: string;
   description: string;
   actionText: string;
+  // Nuevos campos opcionales para comandos OSC dinámicos
+  targetChannel?: string;
+  targetFreq?: number;
 }
 
 interface AICardProps {
@@ -21,22 +26,42 @@ interface AICardProps {
 
 export function AICard({ suggestion }: AICardProps) {
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const removeAlert = useAIStore(state => state.removeAlert);
 
   const handleApply = async () => {
     if (status === "loading" || status === "success") return;
-    
     setStatus("loading");
-    
-    // Usamos las direcciones de prueba solicitadas (simulando que la sugerencia activa esto)
-    const address = "/ch/01/mix/on";
-    const args = [0]; // 0 para mutear, 1 para desmutear en M32
+
+    const channelId = suggestion.targetChannel || "01";
+    let address = "";
+    let args: any[] = [];
+
+    // 2. Lógica Dinámica: Traducir la intención de la IA a comandos de hardware
+    if (suggestion.type === "alert" && suggestion.targetFreq) {
+      // Si es un acople, atacamos la banda 3 (High-Mid) del EQ paramétrico
+      // En la M32, la ganancia (g) va de 0.0 a 1.0 (0.5 es 0dB). 0.25 es un corte profundo (-7.5dB)
+      address = `/ch/${channelId}/eq/3/g`;
+      args = [0.25];
+    } else if (suggestion.type === "masking") {
+      // Si es enmascaramiento grave, aplicamos Filtro Paso Alto (HPF) a 80Hz
+      address = `/ch/${channelId}/pre/hpon`;
+      args = [1]; // 1 para encender
+    } else {
+      // Fallback: comando de prueba de mute
+      address = `/ch/${channelId}/mix/on`;
+      args = [0];
+    }
+
+    console.log(`[OSC Dispatch] Enviando: ${address} con valor:`, args);
 
     const response = await sendOscCommand(address, args);
 
     if (response.success) {
       setStatus("success");
-      // Retornar a idle después de 3s para permitir interactuar de nuevo
-      setTimeout(() => setStatus("idle"), 3000);
+      setTimeout(() => {
+        setStatus("idle");
+        removeAlert(suggestion.id);
+      }, 3000);
     } else {
       setStatus("error");
       setTimeout(() => setStatus("idle"), 3000);
@@ -60,7 +85,7 @@ export function AICard({ suggestion }: AICardProps) {
   };
 
   return (
-    <Card className="bg-zinc-900 border-zinc-800">
+    <Card className="bg-zinc-900 border-zinc-800 shadow-xl border-l-4 border-l-red-500">
       <CardHeader className="p-4 pb-2">
         <div className="flex items-center justify-between">
           <Badge variant="outline" className={getBadgeColor()}>
@@ -72,16 +97,22 @@ export function AICard({ suggestion }: AICardProps) {
         <CardDescription className="text-xs text-zinc-400 mt-1">
           {suggestion.description}
         </CardDescription>
+
+        {/* Mostramos la frecuencia si la IA la detectó */}
+        {suggestion.targetFreq && (
+          <div className="mt-2 font-mono text-[10px] text-red-400 bg-red-950/30 p-1 rounded inline-block">
+            TARGET: {suggestion.targetFreq} Hz
+          </div>
+        )}
       </CardHeader>
       <CardContent className="p-4 pt-2">
-        <Button 
-          className={`w-full mt-2 transition-all ${
-            status === "success" 
-              ? "bg-emerald-600 hover:bg-emerald-700 text-white" 
+        <Button
+          className={`w-full mt-2 transition-all font-bold ${status === "success"
+              ? "bg-emerald-600 hover:bg-emerald-700 text-white"
               : status === "error"
-              ? "bg-red-600 hover:bg-red-700 text-white"
-              : "bg-blue-600 hover:bg-blue-700 text-white"
-          }`}
+                ? "bg-red-600 hover:bg-red-700 text-white"
+                : "bg-red-600 hover:bg-red-700 text-white" // Rojo dominante para alertas de acople
+            }`}
           size="sm"
           onClick={handleApply}
           disabled={status === "loading" || status === "success"}
@@ -90,19 +121,19 @@ export function AICard({ suggestion }: AICardProps) {
           {status === "loading" && (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Aplicando...
+              Cortando Frecuencia...
             </>
           )}
           {status === "success" && (
             <>
               <CheckCircle2 className="w-4 h-4 mr-2" />
-              Aplicado
+              EQ Aplicado
             </>
           )}
           {status === "error" && (
             <>
               <AlertCircle className="w-4 h-4 mr-2" />
-              Error (Reintentar)
+              Fallo de Red
             </>
           )}
         </Button>
