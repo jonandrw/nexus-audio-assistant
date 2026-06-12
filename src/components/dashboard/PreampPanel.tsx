@@ -1,14 +1,21 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Settings2 } from "lucide-react";
+import { Settings2, ExternalLink } from "lucide-react";
 import { sendOscCommand } from "@/lib/osc-client";
 import { DraggableValue } from "./DraggableValue";
+import { useConsoleStore } from "@/lib/console-store";
 
 export function PreampPanel({ activeChannelId }: { activeChannelId: string }) {
-  const [phantomOn, setPhantomOn] = useState(false);
-  const [phaseInvert, setPhaseInvert] = useState(false);
-  const [gainDb, setGainDb] = useState(0); // -12 to 60
+  const channel = useConsoleStore(state => state.channels.find(c => c.id === activeChannelId));
+  const updateChannel = useConsoleStore(state => state.updateChannel);
+  
+  const { gain: gainDb, phantom: phantomOn, phase: phaseInvert } = channel?.preamp || { gain: 0, phantom: false, phase: false };
+
+  const setPhantomOn = (val: boolean) => updateChannel(activeChannelId, { preamp: { ...channel!.preamp, phantom: val } });
+  const setPhaseInvert = (val: boolean) => updateChannel(activeChannelId, { preamp: { ...channel!.preamp, phase: val } });
+  const setGainDb = (val: number) => updateChannel(activeChannelId, { preamp: { ...channel!.preamp, gain: val } });
+
   const [showMenu, setShowMenu] = useState(false);
 
   const togglePhantom = async () => {
@@ -37,9 +44,14 @@ export function PreampPanel({ activeChannelId }: { activeChannelId: string }) {
     <div className="flex flex-col flex-1 min-w-0 min-h-0 bg-black overflow-hidden">
         <div className="flex justify-between items-center bg-zinc-950 border-b border-zinc-900 px-4 py-2 shrink-0 relative">
             <span className="text-[10px] font-bold text-zinc-500 tracking-[0.2em] uppercase">PREAMP</span>
-            <button onClick={() => setShowMenu(!showMenu)} className="text-zinc-500 hover:text-zinc-300 transition-colors">
-                <Settings2 className="w-3 h-3" />
-            </button>
+            <div className="flex items-center gap-2">
+                <button onClick={() => (window as any).electron?.popoutPanel('preamp', activeChannelId)} className="text-zinc-500 hover:text-zinc-300 transition-colors" title="Pop Out">
+                    <ExternalLink className="w-3 h-3" />
+                </button>
+                <button onClick={() => setShowMenu(!showMenu)} className="text-zinc-500 hover:text-zinc-300 transition-colors">
+                    <Settings2 className="w-3 h-3" />
+                </button>
+            </div>
             {showMenu && (
                 <div className="absolute top-full right-2 mt-1 w-24 bg-black border border-zinc-800 shadow-2xl z-50">
                     <button onClick={() => { setGainDb(0); handleGainComplete(0); }} className="w-full text-left px-3 py-1.5 text-[9px] font-bold font-mono text-emerald-500 hover:bg-zinc-900 transition-colors">

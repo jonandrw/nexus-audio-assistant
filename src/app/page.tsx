@@ -12,6 +12,7 @@ import { CompPanel } from "@/components/dashboard/CompPanel";
 import { PreampPanel } from "@/components/dashboard/PreampPanel";
 import { EventLog } from "@/components/dashboard/EventLog";
 import { NetworkPanel } from "@/components/dashboard/NetworkPanel";
+import { SettingsModal } from "@/components/dashboard/SettingsModal";
 import { AudioEngineProvider } from "@/lib/audio-context";
 import { useConsoleStore } from "@/lib/console-store";
 import { useOscListener } from "@/lib/useOscListener";
@@ -93,6 +94,9 @@ export default function DashboardPage() {
 
         {/* FOOTER: Status Bar */}
         <BottomBar />
+
+        {/* Global UI Overlays */}
+        <SettingsModal />
       </div>
     </AudioEngineProvider>
   );

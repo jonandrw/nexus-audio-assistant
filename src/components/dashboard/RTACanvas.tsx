@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
-import { Settings2, ChevronDown, Expand } from "lucide-react";
+import { Settings2, ChevronDown, Expand, ExternalLink } from "lucide-react";
 import { Channel } from "./ChannelList";
 import {
   Select,
@@ -346,6 +346,13 @@ export function RTACanvas({ activeChannel }: RTACanvasProps) {
               </div>
           </div>
           <div className="flex items-center gap-1">
+              <button 
+                  onClick={() => (window as any).electron?.popoutPanel('rta', activeChannel?.id || '01')}
+                  className="bg-black border border-zinc-800 flex items-center justify-center text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors cursor-pointer px-2 py-0.5"
+                  title="Pop Out"
+              >
+                  <ExternalLink className="w-3 h-3 text-xs" />
+              </button>
               <button 
                   onClick={() => setDrawMode(m => m === 'BARS' ? 'CURVE' : 'BARS')}
                   className="bg-black border border-zinc-800 flex items-center gap-2 text-[10px] font-mono px-2 py-0.5 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors cursor-pointer"

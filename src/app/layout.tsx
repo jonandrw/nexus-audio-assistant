@@ -1,23 +1,24 @@
 import type { Metadata } from "next";
-import { Montserrat, Poppins, Roboto_Mono } from "next/font/google";
+import { Poppins, Montserrat, Roboto_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 
-const poppins = Poppins({
-  variable: "--font-sans",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
+const poppins = Poppins({ 
+  subsets: ["latin"], 
+  weight: ["300", "400", "500", "700", "900"],
+  variable: "--font-poppins" 
 });
 
-const montserrat = Montserrat({
-  variable: "--font-heading",
-  subsets: ["latin"],
-  weight: ["400", "600", "700", "800"],
+const montserrat = Montserrat({ 
+  subsets: ["latin"], 
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-montserrat" 
 });
 
-const robotoMono = Roboto_Mono({
-  variable: "--font-mono",
-  subsets: ["latin"],
+const robotoMono = Roboto_Mono({ 
+  subsets: ["latin"], 
+  weight: ["400", "500", "700"],
+  variable: "--font-roboto-mono" 
 });
 
 export const metadata: Metadata = {
@@ -33,7 +34,7 @@ export default function RootLayout({
   return (
     <html
       lang="es"
-      className={`${poppins.variable} ${montserrat.variable} ${robotoMono.variable} dark h-full w-full antialiased overflow-hidden`}
+      className={`dark h-full w-full antialiased overflow-hidden ${poppins.variable} ${montserrat.variable} ${robotoMono.variable}`}
     >
       <body className="h-full w-full flex flex-col bg-background text-foreground overflow-hidden font-sans">
         {children}

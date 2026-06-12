@@ -14,6 +14,7 @@ export function useMidiController() {
     let midiAccess: MIDIAccess | null = null;
 
     const onMidiMessage = (message: MIDIMessageEvent) => {
+      if (!message.data) return;
       const command = message.data[0];
       const noteOrCC = message.data[1];
       const velocity = message.data[2]; // 0 a 127

@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Settings2 } from "lucide-react";
+import { Settings2, ExternalLink } from "lucide-react";
 import { useAudioStore } from "@/lib/audio-store";
 import { sendOscCommand } from "@/lib/osc-client";
 import { DraggableValue } from "./DraggableValue";
+import { useConsoleStore } from "@/lib/console-store";
 
 export function DynamicsPanel({ activeChannelId }: { activeChannelId: string }) {
   const circleRef = useRef<SVGCircleElement>(null);
@@ -12,12 +13,16 @@ export function DynamicsPanel({ activeChannelId }: { activeChannelId: string }) 
   const [isClipping, setIsClipping] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   
+  const channel = useConsoleStore(state => state.channels.find(c => c.id === activeChannelId));
+  const updateChannel = useConsoleStore(state => state.updateChannel);
+  const gateThr = channel?.gate?.thr ?? -60;
+  const setGateThr = (val: number) => updateChannel(activeChannelId, { gate: { thr: val } });
+
   const resetGate = async () => {
       setGateThr(-60); // min threshold effectively bypasses gate
       await sendOscCommand(`/ch/${activeChannelId}/dyn/thr`, [0]); // -60dB -> 0.0
       setShowMenu(false);
   };
-  const [gateThr, setGateThr] = useState(-42.0);
 
   // Circunferencia del anillo SVG: r=40 -> 2*PI*40 ≈ 251.2
   const dashArray = 251.2;
@@ -64,9 +69,14 @@ export function DynamicsPanel({ activeChannelId }: { activeChannelId: string }) 
     <div className="flex flex-col flex-1 min-h-0 bg-black">
         <div className="flex justify-between items-center bg-zinc-950 border-b border-zinc-900 px-4 py-2 shrink-0 relative">
             <span className="text-[10px] font-bold text-zinc-500 tracking-[0.2em] uppercase">NOISE GATE</span>
-            <button onClick={() => setShowMenu(!showMenu)} className="text-zinc-500 hover:text-zinc-300 transition-colors">
-                <Settings2 className="w-3 h-3" />
-            </button>
+            <div className="flex items-center gap-2">
+                <button onClick={() => (window as any).electron?.popoutPanel('gate', activeChannelId)} className="text-zinc-500 hover:text-zinc-300 transition-colors" title="Pop Out">
+                    <ExternalLink className="w-3 h-3" />
+                </button>
+                <button onClick={() => setShowMenu(!showMenu)} className="text-zinc-500 hover:text-zinc-300 transition-colors">
+                    <Settings2 className="w-3 h-3" />
+                </button>
+            </div>
             {showMenu && (
                 <div className="absolute top-full right-2 mt-1 w-28 bg-black border border-zinc-800 shadow-2xl z-50">
                     <button onClick={resetGate} className="w-full text-left px-3 py-1.5 text-[9px] font-bold font-mono text-red-500 hover:bg-zinc-900 transition-colors">

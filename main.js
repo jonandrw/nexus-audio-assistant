@@ -1,16 +1,17 @@
-const { app, BrowserWindow } = require('electron');
-const { spawn } = require('child_process');
-const waitOn = require('wait-on');
+const { app, BrowserWindow, ipcMain } = require('electron');
+const path = require('path');
+const next = require('next');
+const http = require('http');
 
 // Optimizaciones extremas de hardware
 app.commandLine.appendSwitch('ignore-gpu-blocklist');
 app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('enable-zero-copy');
-// Obligar a Windows a usar la GPU de alto rendimiento
 app.commandLine.appendSwitch('force-gpu-selection', 'high');
 
 let mainWindow;
-let nextProcess;
+const dev = !app.isPackaged;
+const dir = app.getAppPath();
 
 async function createWindow() {
   mainWindow = new BrowserWindow({
@@ -20,31 +21,39 @@ async function createWindow() {
     backgroundColor: '#000000', // Respetar la estética oscura de Nexus
     webPreferences: {
       nodeIntegration: false,
-      contextIsolation: true
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
     }
   });
+
+  mainWindow.on('maximize', () => mainWindow.webContents.send('window-maximized', true));
+  mainWindow.on('unmaximize', () => mainWindow.webContents.send('window-maximized', false));
 
   await mainWindow.loadURL('http://localhost:3000');
 }
 
 app.whenReady().then(async () => {
-  // Iniciar servidor Next.js
-  nextProcess = spawn(/^win/.test(process.platform) ? 'npm.cmd' : 'npm', ['run', 'start'], {
-    shell: true,
-    stdio: 'inherit' // Permite ver los logs del OSC server si es que están ahí
-  });
-
-  // Esperar hasta que el puerto esté activo usando wait-on
   try {
-    console.log("Esperando a que Next.js inicie en el puerto 3000...");
-    await waitOn({
-      resources: ['http://localhost:3000'],
-      timeout: 30000,
+    console.log("Iniciando motor de Next.js internamente...");
+    
+    // Iniciar Next.js de manera programática en lugar de usar procesos de shell
+    const nextApp = next({ dev, dir });
+    const handle = nextApp.getRequestHandler();
+    
+    await nextApp.prepare();
+
+    const server = http.createServer((req, res) => {
+      handle(req, res);
     });
-    console.log("Next.js detectado. Abriendo ventana principal...");
-    createWindow();
+
+    server.listen(3000, (err) => {
+      if (err) throw err;
+      console.log("Next.js listo en puerto 3000. Abriendo UI...");
+      createWindow();
+    });
+
   } catch (err) {
-    console.error("Error al conectar con Next.js:", err);
+    console.error("Error crítico arrancando Next.js:", err);
     app.quit();
   }
 
@@ -57,15 +66,52 @@ app.on('window-all-closed', function () {
   if (process.platform !== 'darwin') app.quit();
 });
 
-// Limpieza crítica de procesos hijos (Next.js y el backend de OSC)
-app.on('before-quit', () => {
-  if (nextProcess) {
-    console.log("Deteniendo servidor Next.js...");
-    // Intentar cerrar el proceso en Windows de forma recursiva
-    if (/^win/.test(process.platform)) {
-        spawn("taskkill", ["/pid", nextProcess.pid, '/f', '/t']);
+// -- IPC HANDLERS --
+ipcMain.on('window-control', (event, action) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return;
+  
+  if (action === 'minimize') {
+    win.minimize();
+  } else if (action === 'maximize') {
+    if (win.isMaximized()) {
+      win.unmaximize();
     } else {
-        nextProcess.kill('SIGTERM');
+      win.maximize();
     }
+  } else if (action === 'fullscreen') {
+    win.setFullScreen(!win.isFullScreen());
+  } else if (action === 'close') {
+    win.close();
   }
+});
+
+// Broadcast sync state
+ipcMain.on('sync-state', (event, payload) => {
+  const senderId = event.sender.id;
+  BrowserWindow.getAllWindows().forEach(win => {
+    if (win.webContents.id !== senderId) {
+      win.webContents.send('sync-state', payload);
+    }
+  });
+});
+
+ipcMain.on('popout-panel', (event, { panelName, channelId }) => {
+  const popoutWin = new BrowserWindow({
+    width: 600,
+    height: 800,
+    frame: false,
+    backgroundColor: '#000000',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
+    }
+  });
+
+  const url = `http://localhost:3000/popout/${panelName}?channel=${channelId || '01'}`;
+  popoutWin.loadURL(url);
+
+  popoutWin.on('maximize', () => popoutWin.webContents.send('window-maximized', true));
+  popoutWin.on('unmaximize', () => popoutWin.webContents.send('window-maximized', false));
 });

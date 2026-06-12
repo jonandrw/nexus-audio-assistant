@@ -1,18 +1,30 @@
 "use client";
 
 import React from 'react';
-import { Waves, Settings } from 'lucide-react';
+import { Waves, Settings, Minus, Square, X, Copy, Maximize } from 'lucide-react';
 import { useNetworkStore } from '@/lib/network-store';
+import { useUiStore } from '@/lib/ui-store';
 
 export function TopBar() {
   const { latencyMs, isConnected } = useNetworkStore();
   const [liveSeconds, setLiveSeconds] = React.useState(0);
+  const openSettings = useUiStore(state => state.openSettings);
+  const [isMaximized, setIsMaximized] = React.useState(false);
 
   React.useEffect(() => {
     if (!isConnected) return;
     const interval = setInterval(() => setLiveSeconds(prev => prev + 1), 1000);
     return () => clearInterval(interval);
   }, [isConnected]);
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).electron) {
+      const unsub = (window as any).electron.onWindowMaximized((max: boolean) => {
+        setIsMaximized(max);
+      });
+      return unsub;
+    }
+  }, []);
 
   const formatTime = (totalSeconds: number) => {
     const h = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
@@ -22,7 +34,10 @@ export function TopBar() {
   };
 
   return (
-    <header className="h-14 border-b border-zinc-900 bg-zinc-950 flex items-center justify-between px-4 shrink-0">
+    <header 
+      className="h-14 border-b border-zinc-900 bg-zinc-950 flex items-center justify-between px-4 shrink-0"
+      style={{ WebkitAppRegion: 'drag' } as any}
+    >
         {/* Logo */}
         <div className="flex items-center gap-4">
             <div className="w-8 h-8 bg-black flex items-center justify-center border border-zinc-800">
@@ -68,15 +83,50 @@ export function TopBar() {
             </div>
         </div>
 
-        {/* User Actions */}
-        <div className="flex items-center gap-2 h-full border-l border-zinc-900 pl-4">
-            <button className="w-8 h-8 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 flex items-center justify-center text-zinc-400 transition-colors">
+        {/* User Actions & Window Controls */}
+        <div 
+          className="flex items-center gap-2 h-full border-l border-zinc-900 pl-4"
+          style={{ WebkitAppRegion: 'no-drag' } as any}
+        >
+            <button 
+              onClick={openSettings}
+              className="w-8 h-8 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 flex items-center justify-center text-zinc-400 transition-colors"
+            >
                 <Settings className="w-4 h-4" />
             </button>
             <div className="flex items-center gap-2 pl-2">
                 <div className="w-8 h-8 bg-black border border-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-300 tracking-wider">
                    FOH
                 </div>
+            </div>
+            
+            {/* Window Controls */}
+            <div className="flex items-center ml-4 gap-1">
+                <button 
+                  onClick={() => (window as any).electron?.windowControl('minimize')}
+                  className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
+                >
+                    <Minus className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => (window as any).electron?.windowControl('maximize')}
+                  className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
+                >
+                    {isMaximized ? <Copy className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
+                </button>
+                <button 
+                  onClick={() => (window as any).electron?.windowControl('fullscreen')}
+                  className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
+                  title="Fullscreen"
+                >
+                    <Maximize className="w-3.5 h-3.5" />
+                </button>
+                <button 
+                  onClick={() => (window as any).electron?.windowControl('close')}
+                  className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:bg-red-500 hover:text-white transition-colors"
+                >
+                    <X className="w-4 h-4" />
+                </button>
             </div>
         </div>
     </header>

@@ -80,19 +80,19 @@ export function AudioEngineProvider({ children }: { children: React.ReactNode })
 
   const getFrequencyData = useCallback((dataArray: Uint8Array) => {
     if (analyserRef.current) {
-      analyserRef.current.getByteFrequencyData(dataArray);
+      analyserRef.current.getByteFrequencyData(dataArray as any);
     }
   }, []);
 
   const getTimeDomainData = useCallback((dataArray: Uint8Array) => {
     if (analyserRef.current) {
-      analyserRef.current.getByteTimeDomainData(dataArray);
+      analyserRef.current.getByteTimeDomainData(dataArray as any);
     }
   }, []);
 
   const getFloatTimeDomainData = useCallback((dataArray: Float32Array) => {
     if (analyserRef.current) {
-      analyserRef.current.getFloatTimeDomainData(dataArray);
+      analyserRef.current.getFloatTimeDomainData(dataArray as any);
     }
   }, []);
 

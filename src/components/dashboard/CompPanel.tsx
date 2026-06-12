@@ -1,19 +1,26 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Settings2 } from "lucide-react";
+import { Settings2, ExternalLink } from "lucide-react";
 import { useAudioStore } from "@/lib/audio-store";
 import { sendOscCommand } from "@/lib/osc-client";
 import { DraggableValue } from "./DraggableValue";
+import { useConsoleStore } from "@/lib/console-store";
 
 export function CompPanel({ activeChannelId }: { activeChannelId: string }) {
-  const [thresholdDb, setThresholdDb] = useState(-20);
-  const [ratio, setRatio] = useState(4);
-  const [attack, setAttack] = useState(12);
-  const [release, setRelease] = useState(150);
+  const channel = useConsoleStore(state => state.channels.find(c => c.id === activeChannelId));
+  const updateChannel = useConsoleStore(state => state.updateChannel);
+
+  const { thr: thresholdDb, ratio, atk: attack, rel: release } = channel?.comp || { thr: -20, ratio: 4, atk: 12, rel: 150 };
+
+  const setThresholdDb = (val: number) => updateChannel(activeChannelId, { comp: { ...channel!.comp, thr: val } });
+  const setRatio = (val: number) => updateChannel(activeChannelId, { comp: { ...channel!.comp, ratio: val } });
+  const setAttack = (val: number) => updateChannel(activeChannelId, { comp: { ...channel!.comp, atk: val } });
+  const setRelease = (val: number) => updateChannel(activeChannelId, { comp: { ...channel!.comp, rel: val } });
   
   const [isDragging, setIsDragging] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [dimensions, setDimensions] = useState({ width: 500, height: 300 });
   
   const resetComp = async () => {
       setThresholdDb(0);
@@ -32,6 +39,20 @@ export function CompPanel({ activeChannelId }: { activeChannelId: string }) {
   const grMeterRef = useRef<HTMLDivElement>(null);
   const grTextRef = useRef<HTMLDivElement>(null);
   const activePointRef = useRef<SVGCircleElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        setDimensions({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height
+        });
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     let currentGr = 0;
@@ -61,12 +82,12 @@ export function CompPanel({ activeChannelId }: { activeChannelId: string }) {
       }
 
       if (activePointRef.current) {
-         const xPercent = ((Math.max(-60, Math.min(0, db)) + 60) / 60) * 100;
+         const xPix = ((Math.max(-60, Math.min(0, db)) + 60) / 60) * dimensions.width;
          const outDb = db - currentGr;
-         const yPercent = 100 - ((Math.max(-60, Math.min(0, outDb)) + 60) / 60) * 100;
+         const yPix = dimensions.height - ((Math.max(-60, Math.min(0, outDb)) + 60) / 60) * dimensions.height;
          
-         activePointRef.current.setAttribute("cx", `${xPercent}`);
-         activePointRef.current.setAttribute("cy", `${yPercent}`);
+         activePointRef.current.setAttribute("cx", `${xPix}`);
+         activePointRef.current.setAttribute("cy", `${yPix}`);
       }
     });
 
@@ -81,9 +102,9 @@ export function CompPanel({ activeChannelId }: { activeChannelId: string }) {
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!isDragging || !containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const xPercent = ((e.clientX - rect.left) / rect.width);
+    const xPix = e.clientX - rect.left;
     
-    let newThr = -60 + (xPercent * 60);
+    let newThr = -60 + ((xPix / dimensions.width) * 60);
     newThr = Math.max(-60, Math.min(0, newThr));
     setThresholdDb(newThr);
   };
@@ -98,21 +119,26 @@ export function CompPanel({ activeChannelId }: { activeChannelId: string }) {
     }
   };
 
-  const thrX = ((thresholdDb + 60) / 60) * 100;
-  const thrY = 100 - thrX; 
-  const maxInX = 100;
+  const thrX = ((thresholdDb + 60) / 60) * dimensions.width;
+  const thrY = dimensions.height - (((thresholdDb + 60) / 60) * dimensions.height); 
+  const maxInX = dimensions.width;
   const maxOutDb = thresholdDb + (0 - thresholdDb) / ratio;
-  const maxOutY = 100 - ((maxOutDb + 60) / 60) * 100;
+  const maxOutY = dimensions.height - (((maxOutDb + 60) / 60) * dimensions.height);
 
-  const transferPath = `M 0 100 L ${thrX} ${thrY} L ${maxInX} ${maxOutY}`;
+  const transferPath = `M 0 ${dimensions.height} L ${thrX} ${thrY} L ${maxInX} ${maxOutY}`;
 
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-black border-l border-zinc-900">
         <div className="flex justify-between items-center bg-zinc-950 border-b border-zinc-900 px-4 py-2 shrink-0 relative">
             <span className="text-[10px] font-bold text-zinc-500 tracking-[0.2em] uppercase">COMPRESSOR</span>
-            <button onClick={() => setShowMenu(!showMenu)} className="text-zinc-500 hover:text-zinc-300 transition-colors">
-                <Settings2 className="w-3 h-3" />
-            </button>
+            <div className="flex items-center gap-2">
+                <button onClick={() => (window as any).electron?.popoutPanel('comp', activeChannelId)} className="text-zinc-500 hover:text-zinc-300 transition-colors" title="Pop Out">
+                    <ExternalLink className="w-3 h-3" />
+                </button>
+                <button onClick={() => setShowMenu(!showMenu)} className="text-zinc-500 hover:text-zinc-300 transition-colors">
+                    <Settings2 className="w-3 h-3" />
+                </button>
+            </div>
             {showMenu && (
                 <div className="absolute top-full right-2 mt-1 w-28 bg-black border border-zinc-800 shadow-2xl z-50">
                     <button onClick={resetComp} className="w-full text-left px-3 py-1.5 text-[9px] font-bold font-mono text-red-500 hover:bg-zinc-900 transition-colors">
@@ -141,21 +167,32 @@ export function CompPanel({ activeChannelId }: { activeChannelId: string }) {
                     <div className="absolute inset-0 pointer-events-none" style={{background: 'linear-gradient(45deg, transparent 49%, rgba(39,39,42,0.5) 50%, transparent 51%)'}}></div>
                     <div className="absolute inset-0 pointer-events-none" style={{background: 'linear-gradient(90deg, rgba(39,39,42,0.4) 1px, transparent 1px), linear-gradient(180deg, rgba(39,39,42,0.4) 1px, transparent 1px)', backgroundSize: '20% 20%'}}></div>
                     
-                    <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full preserve-3d overflow-visible" preserveAspectRatio="none">
-                        <path d={`M 0 100 L ${thrX} ${thrY} L ${maxInX} ${100 - maxInX} L ${maxInX} ${maxOutY} Z`} fill="rgba(239, 68, 68, 0.15)" />
+                    <svg viewBox={`0 0 ${dimensions.width} ${dimensions.height}`} className="absolute inset-0 w-full h-full preserve-3d overflow-visible">
+                        <path d={`M 0 ${dimensions.height} L ${thrX} ${thrY} L ${maxInX} ${dimensions.height - maxInX} L ${maxInX} ${maxOutY} Z`} fill="rgba(239, 68, 68, 0.15)" />
                         <path d={transferPath} fill="none" stroke="#10b981" strokeWidth="2" className="drop-shadow-[0_0_5px_rgba(16,185,129,0.5)]" />
                         
-                        <circle 
-                          cx={thrX} 
-                          cy={thrY} 
-                          r={isDragging ? "6" : "4"} 
-                          fill="#09090b" 
-                          stroke="#10b981" 
-                          strokeWidth="2" 
-                          className={`cursor-grab ${isDragging ? "cursor-grabbing drop-shadow-[0_0_8px_rgba(16,185,129,1)]" : ""} transition-all duration-75`}
-                          onPointerDown={handlePointerDown}
-                        />
-                        <circle ref={activePointRef} cx="0" cy="100" r="3" fill="#ef4444" className="pointer-events-none transition-all duration-75 ease-out" />
+                        <g className="cursor-grab hover:cursor-grabbing">
+                            {isDragging && (
+                               <circle cx={thrX} cy={thrY} r="16" fill="#10b981" opacity="0.2" className="pointer-events-none animate-pulse" />
+                            )}
+                            <circle 
+                              cx={thrX} 
+                              cy={thrY} 
+                              r="24" 
+                              fill="transparent" 
+                              onPointerDown={handlePointerDown}
+                            />
+                            <circle 
+                              cx={thrX} 
+                              cy={thrY} 
+                              r={isDragging ? "7" : "5"} 
+                              fill="#09090b" 
+                              stroke="#10b981" 
+                              strokeWidth="2.5" 
+                              className={`pointer-events-none transition-all duration-75`}
+                            />
+                        </g>
+                        <circle ref={activePointRef} cx="0" cy={dimensions.height} r="4" fill="#ef4444" className="pointer-events-none transition-all duration-75 ease-out drop-shadow-[0_0_4px_rgba(239,68,68,0.8)]" />
                     </svg>
                 </div>
             </div>

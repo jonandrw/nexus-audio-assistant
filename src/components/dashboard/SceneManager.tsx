@@ -98,7 +98,7 @@ export function SceneManager() {
         {/* Cargar Escena */}
         <div className="flex items-center gap-2">
           <div className="flex-1 bg-slate-900 border border-slate-700 rounded flex items-center overflow-hidden">
-            <Select value={selectedSceneId} onValueChange={setSelectedSceneId}>
+            <Select value={selectedSceneId} onValueChange={(val) => setSelectedSceneId(val || "")}>
               <SelectTrigger className="border-none bg-transparent h-auto py-2 px-3 focus:ring-0 gap-2 text-slate-200 text-xs w-full">
                 <SelectValue placeholder="Seleccionar Escena" />
               </SelectTrigger>

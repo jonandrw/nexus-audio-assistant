@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 import { Channel } from '@/components/dashboard/ChannelList';
 
+export interface EqBand {
+  id: number;
+  type: string;
+  freq: number;
+  gain: number;
+  q: number;
+}
+
 export interface Scene {
   id: string;
   name: string;
@@ -8,10 +16,26 @@ export interface Scene {
   channels: Channel[];
 }
 
+export interface Channel {
+  id: string;
+  number: number;
+  name: string;
+  level: number;
+  active: boolean;
+  muted: boolean;
+  solo: boolean;
+  eqBands: EqBand[];
+  comp: { thr: number; ratio: number; atk: number; rel: number; };
+  gate: { thr: number; };
+  preamp: { gain: number; phantom: boolean; phase: boolean; };
+}
+
 interface ConsoleState {
   channels: Channel[];
   savedScenes: Scene[];
   updateChannelState: (address: string, args: any[]) => void;
+  updateChannel: (channelId: string, updates: Partial<Channel>) => void;
+  updateChannelSilent: (channelId: string, updates: Partial<Channel>) => void;
   setChannels: (channels: Channel[]) => void;
   saveScene: (sceneName: string) => void;
   loadScene: (sceneId: string) => void;
@@ -31,6 +55,15 @@ const initializeChannels = (): Channel[] => {
       active: true,
       muted: false,
       solo: false,
+      eqBands: [
+        { id: 1, type: "HPF", freq: 80, gain: 0, q: 1 },
+        { id: 2, type: "LMF", freq: 400, gain: 0, q: 1 },
+        { id: 3, type: "HMF", freq: 2500, gain: 0, q: 1 },
+        { id: 4, type: "LPF", freq: 10000, gain: 0, q: 1 },
+      ],
+      comp: { thr: 0, ratio: 1, atk: 12, rel: 150 },
+      gate: { thr: -60 },
+      preamp: { gain: 0, phantom: false, phase: false }
     });
   }
   return channels;
@@ -72,6 +105,21 @@ export const useConsoleStore = create<ConsoleState>((set) => ({
     return state;
   }),
 
+  updateChannel: (channelId, updates) => {
+    set((state) => ({
+      channels: state.channels.map(ch => ch.id === channelId ? { ...ch, ...updates } : ch)
+    }));
+    if (typeof window !== 'undefined' && (window as any).nexusSyncChannel) {
+      (window as any).nexusSyncChannel.postMessage({ type: 'CHANNEL_UPDATE', channelId, updates });
+    }
+  },
+
+  updateChannelSilent: (channelId, updates) => {
+    set((state) => ({
+      channels: state.channels.map(ch => ch.id === channelId ? { ...ch, ...updates } : ch)
+    }));
+  },
+
   updateChannelState: (address, args) => set((state) => {
     // Ejemplo de dirección OSC: /ch/01/mix/on
     // Ejemplo de nombre OSC: /ch/01/config/name
@@ -109,3 +157,30 @@ export const useConsoleStore = create<ConsoleState>((set) => ({
     return state; // Retorna el estado sin cambios si no es una ruta conocida
   }),
 }));
+
+// Setup robust cross-window sync using BroadcastChannel
+if (typeof window !== 'undefined') {
+  const syncChannel = new BroadcastChannel('nexus-sync');
+  (window as any).nexusSyncChannel = syncChannel;
+
+  syncChannel.onmessage = (event) => {
+    const payload = event.data;
+    if (payload.type === 'CHANNEL_UPDATE') {
+      useConsoleStore.getState().updateChannelSilent(payload.channelId, payload.updates);
+    } else if (payload.type === 'REQUEST_FULL_STATE') {
+      // Respond to new windows with the current full state
+      syncChannel.postMessage({
+        type: 'FULL_STATE_REPLY',
+        channels: useConsoleStore.getState().channels
+      });
+    } else if (payload.type === 'FULL_STATE_REPLY') {
+      // Receive full state from existing window
+      useConsoleStore.getState().setChannels(payload.channels);
+    }
+  };
+
+  // When this store initializes, it might be a new popout window. Request state!
+  setTimeout(() => {
+    syncChannel.postMessage({ type: 'REQUEST_FULL_STATE' });
+  }, 100);
+}
